@@ -1,0 +1,7 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/CommentHub.Api/CommentHub.Api.csproj" />
+    <Project Path="src/CommentHub.Database/CommentHub.Database.csproj" Id="683401e8-ee1c-4564-9f3b-f688ab4ab27f" />
+    <Project Path="src/CommentHub.GraphQL/CommentHub.GraphQL.csproj" />
+  </Folder>
+</Solution>
