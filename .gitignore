@@ -4,6 +4,7 @@
 ## Get latest from https://github.com/github/gitignore/blob/main/VisualStudio.gitignore
 
 # User-specific files
+*NET_Entity_framework_SPA_application_comments.pdf
 *.rsuser
 *.suo
 *.user
