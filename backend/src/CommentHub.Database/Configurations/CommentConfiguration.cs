@@ -56,7 +56,8 @@ public class CommentConfiguration : IEntityTypeConfiguration<Comment>
             .HasFilter(""" "ParentId" IS NULL """)
             .HasDatabaseName("IX_Comments_Roots_CreatedAt_Id");
 
-        // All replies for the current page's set of roots — in a single query.
-        builder.HasIndex(comment => new { comment.RootId, comment.Id });
+        builder.HasIndex(comment => new { comment.ParentId, comment.CreatedAt, comment.Id })
+            .HasFilter(""" "ParentId" IS NOT NULL """)
+            .HasDatabaseName("IX_Comments_Replies_ParentId_CreatedAt_Id");
     }
 }
