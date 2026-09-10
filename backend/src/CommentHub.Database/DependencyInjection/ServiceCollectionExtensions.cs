@@ -8,21 +8,20 @@ public static class ServiceCollectionExtensions
 {
     private const string ConnectionStringName = "CommentHub";
 
-    /// <summary>
-    /// Registers <see cref="CommentHubDbContext"/> so the calling project does not need
-    /// to know which database provider is used underneath.
-    /// </summary>
     public static IServiceCollection AddCommentHubDatabase(
         this IServiceCollection services,
         IConfiguration configuration
     )
     {
-        var connectionString = configuration.GetConnectionString(ConnectionStringName)
-            ?? throw new InvalidOperationException(
-                $"Connection string '{ConnectionStringName}' is not configured."
-            );
+        services.AddDbContextFactory<CommentHubDbContext>(options =>
+        {
+            var connectionString = configuration.GetConnectionString(ConnectionStringName)
+                ?? throw new InvalidOperationException(
+                    $"Connection string '{ConnectionStringName}' is not configured."
+                );
 
-        services.AddDbContext<CommentHubDbContext>(options => options.UseNpgsql(connectionString));
+            options.UseNpgsql(connectionString);
+        });
 
         return services;
     }
