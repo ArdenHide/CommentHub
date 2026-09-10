@@ -1,4 +1,5 @@
 using CommentHub.Database;
+using CommentHub.Database.Entities;
 using CommentHub.GraphQL.Types;
 using Microsoft.EntityFrameworkCore;
 
@@ -25,4 +26,13 @@ public static partial class CommentQueries
 
         return new CommentPage(items, totalCount);
     }
+
+    public static async Task<Comment?> GetCommentAsync(
+        long id,
+        CommentHubDbContext dbContext,
+        CancellationToken cancellationToken
+    )
+        => await dbContext.Comments
+            .Include(comment => comment.User)
+            .FirstOrDefaultAsync(comment => comment.Id == id, cancellationToken);
 }
