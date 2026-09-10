@@ -10,10 +10,11 @@ public sealed class CommentQueriesTests(PostgresFixture postgres) : IAsyncLifeti
     private readonly PostgresFixture _postgres = postgres;
     private CommentHubApiFactory _factory = null!;
     private HttpClient _client = null!;
+    private SeededComments _seeded;
 
     public async ValueTask InitializeAsync()
     {
-        await ResetAndSeedAsync();
+        _seeded = await ResetAndSeedAsync();
 
         _factory = new CommentHubApiFactory(_postgres.ConnectionString);
         _client = _factory.CreateClient();
@@ -25,7 +26,9 @@ public sealed class CommentQueriesTests(PostgresFixture postgres) : IAsyncLifeti
         await _factory.DisposeAsync();
     }
 
-    private async Task ResetAndSeedAsync()
+    private readonly record struct SeededComments(long Root1Id, long Reply1Id, long Reply1AId, long Root2Id);
+
+    private async Task<SeededComments> ResetAndSeedAsync()
     {
         await using var dbContext = _postgres.CreateDbContext();
 
@@ -88,6 +91,8 @@ public sealed class CommentQueriesTests(PostgresFixture postgres) : IAsyncLifeti
         dbContext.Comments.Add(root2);
 
         await dbContext.SaveChangesAsync();
+
+        return new SeededComments(root1.Id, reply1.Id, reply1A.Id, root2.Id);
     }
 
     [Fact]
@@ -187,6 +192,51 @@ public sealed class CommentQueriesTests(PostgresFixture postgres) : IAsyncLifeti
         => response.RootElement.GetProperty("data").GetProperty("comments").GetProperty("items")
             .EnumerateArray()
             .Single(item => item.GetProperty("textHtml").GetString() == textHtml);
+
+    [Fact]
+    public async Task Comment_by_id_returns_the_requested_comment_with_its_replies()
+    {
+        const string query = """
+            query($id: Long!) {
+              comment(id: $id) {
+                textHtml
+                replies(take: 5) {
+                  totalCount
+                  items { textHtml }
+                }
+              }
+            }
+            """;
+
+        using var result = await _client.PostGraphQLAsync(query, new { id = _seeded.Reply1Id });
+        var comment = result.RootElement.GetProperty("data").GetProperty("comment");
+
+        Assert.Equal("<p>reply1</p>", comment.GetProperty("textHtml").GetString());
+
+        var replies = comment.GetProperty("replies");
+        Assert.Equal(1, replies.GetProperty("totalCount").GetInt32());
+        var replyItems = replies.GetProperty("items").EnumerateArray().ToArray();
+        Assert.Single(replyItems);
+        Assert.Equal("<p>reply1a</p>", replyItems[0].GetProperty("textHtml").GetString());
+    }
+
+    [Fact]
+    public async Task Comment_by_id_returns_null_for_unknown_id()
+    {
+        const string query = """
+            query($id: Long!) {
+              comment(id: $id) { textHtml }
+            }
+            """;
+
+        using var result = await _client.PostGraphQLAsync(query, new { id = 999999 });
+
+        Assert.Equal(
+            System.Text.Json.JsonValueKind.Null,
+            result.RootElement.GetProperty("data").GetProperty("comment").ValueKind
+        );
+        Assert.False(result.RootElement.TryGetProperty("errors", out _));
+    }
 
     [Fact]
     public async Task User_type_does_not_expose_email()
