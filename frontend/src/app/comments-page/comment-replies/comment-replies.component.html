@@ -1,0 +1,74 @@
+@if (repliesTotalCount() > 0) {
+  @if (depth() === 0) {
+    <ul class="list-group list-group-flush reply-list">
+      @for (reply of visibleReplies(); track reply.id) {
+        <li class="list-group-item reply-card px-0 py-2">
+          <div class="d-flex">
+            <div
+              class="avatar-circle avatar-circle--sm flex-shrink-0 me-2"
+              [style.background-color]="reply.avatarColor"
+            >
+              {{ reply.authorInitials }}
+            </div>
+            <div class="flex-grow-1">
+              <div class="d-flex justify-content-between align-items-baseline">
+                <h6 class="mb-0">{{ reply.authorName }}</h6>
+                <small class="text-muted">{{ reply.createdAt | date:'medium' }}</small>
+              </div>
+              <p class="mb-1 mt-1" [innerHTML]="reply.textHtml"></p>
+              <button type="button" class="btn btn-link btn-sm p-0 reply-btn" mdbRipple>
+                Reply
+              </button>
+              <app-comment-replies [node]="reply" [depth]="1" />
+            </div>
+          </div>
+        </li>
+      }
+    </ul>
+  } @else {
+    @if (expanded()) {
+      <ul class="list-group list-group-flush reply-list" [class.thread-rail]="depth() === 1">
+        @for (reply of visibleReplies(); track reply.id) {
+          <li class="list-group-item reply-card reply-card--flat px-2 py-2">
+            <small class="text-muted reply-to-label d-block mb-1">
+              ↳ Reply to {{ node().authorName }}
+            </small>
+            <div class="d-flex align-items-center gap-2">
+              <div
+                class="avatar-circle avatar-circle--sm flex-shrink-0"
+                [style.background-color]="reply.avatarColor"
+              >
+                {{ reply.authorInitials }}
+              </div>
+              <h6 class="mb-0">{{ reply.authorName }}</h6>
+              <small class="text-muted ms-auto">{{ reply.createdAt | date:'medium' }}</small>
+            </div>
+            <p class="mb-1 mt-1" [innerHTML]="reply.textHtml"></p>
+            <button type="button" class="btn btn-link btn-sm p-0 reply-btn" mdbRipple>
+              Reply
+            </button>
+            <app-comment-replies [node]="reply" [depth]="depth() + 1" />
+          </li>
+        }
+      </ul>
+    }
+  }
+
+  @if (error()) {
+    <div class="alert alert-danger py-1 px-2 small" role="alert">{{ error() }}</div>
+  }
+
+  @if (toggleVisible()) {
+    <div>
+      <button
+        type="button"
+        class="btn btn-link btn-sm p-0 toggle-replies-btn"
+        mdbRipple
+        [disabled]="loading()"
+        (click)="toggle()"
+      >
+        {{ toggleButtonLabel() }}
+      </button>
+    </div>
+  }
+}
