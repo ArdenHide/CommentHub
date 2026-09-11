@@ -1,0 +1,19 @@
+.comments-page {
+  max-width: 720px;
+}
+
+.avatar-circle {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.comment-card:not(:last-child) {
+  border-bottom: 1px solid #e0e0e0;
+}
