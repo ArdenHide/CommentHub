@@ -7,11 +7,9 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="FluentValidation" Version="12.1.1" />
     <PackageReference Include="HotChocolate.AspNetCore" Version="16.6.4" />
     <PackageReference Include="HotChocolate.Types.Analyzers" Version="16.6.4" PrivateAssets="all" />
     <PackageReference Include="HotChocolate.Data.EntityFramework" Version="16.6.4" />
-    <PackageReference Include="HtmlSanitizer" Version="9.2.1039" />
   </ItemGroup>
 
   <ItemGroup>
