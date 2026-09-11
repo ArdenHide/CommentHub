@@ -13,6 +13,13 @@ import {
   GetCommentRepliesResult,
   GetCommentRepliesVariables,
 } from './graphql/get-comment-replies.query';
+import {
+  ADD_COMMENT_MUTATION,
+  AddCommentInput,
+  AddCommentPayloadDto,
+  AddCommentResult,
+  AddCommentVariables,
+} from './graphql/add-comment.mutation';
 
 @Injectable({ providedIn: 'root' })
 export class CommentsService {
@@ -55,6 +62,23 @@ export class CommentsService {
           }
 
           return result.data.comment.replies;
+        }),
+      );
+  }
+
+  addComment(input: AddCommentInput): Observable<AddCommentPayloadDto> {
+    return this.apollo
+      .mutate<AddCommentResult, AddCommentVariables>({
+        mutation: ADD_COMMENT_MUTATION,
+        variables: { input },
+      })
+      .pipe(
+        map((result) => {
+          if (!result.data) {
+            throw new Error('AddComment mutation returned no data');
+          }
+
+          return result.data.addComment;
         }),
       );
   }

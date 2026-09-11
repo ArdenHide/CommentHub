@@ -1,6 +1,8 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { of, throwError } from 'rxjs';
+import { MdbModalService } from 'mdb-angular-ui-kit/modal';
 import { CommentReplies } from './comment-replies.component';
+import { CommentFormComponent } from '../comment-form/comment-form.component';
 import { CommentsService } from '../comments.service';
 import { CommentNode } from '../comment-node.mapper';
 import { RepliesPageDto } from '../graphql/get-comments.query';
@@ -35,13 +37,18 @@ function makeRepliesPage(count: number, totalCount: number): RepliesPageDto {
 describe('CommentReplies', () => {
   let fixture: ComponentFixture<CommentReplies>;
   let commentsService: { getReplies: ReturnType<typeof vi.fn> };
+  let modalService: { open: ReturnType<typeof vi.fn> };
 
   beforeEach(async () => {
     commentsService = { getReplies: vi.fn() };
+    modalService = { open: vi.fn() };
 
     await TestBed.configureTestingModule({
       imports: [CommentReplies],
-      providers: [{ provide: CommentsService, useValue: commentsService }],
+      providers: [
+        { provide: CommentsService, useValue: commentsService },
+        { provide: MdbModalService, useValue: modalService },
+      ],
     }).compileComponents();
 
     fixture = TestBed.createComponent(CommentReplies);
@@ -56,6 +63,13 @@ describe('CommentReplies', () => {
     setNode(makeNode(1, { repliesTotalCount: 0, replies: [] }));
 
     expect(fixture.nativeElement.querySelectorAll('.reply-card')).toHaveLength(0);
+  });
+
+  it('renders reply text with whitespace preserved so line breaks survive', () => {
+    const preview = [makeNode(2)];
+    setNode(makeNode(1, { repliesTotalCount: 1, replies: preview }));
+
+    expect(fixture.nativeElement.querySelector('.reply-card p.comment-text')).toBeTruthy();
   });
 
   it('renders only the one newest preview reply and hides the Show all button when there is just 1', () => {
@@ -152,7 +166,8 @@ describe('CommentReplies', () => {
 
     expect(fixture.nativeElement.querySelectorAll('.reply-btn')).toHaveLength(1);
 
-    const revealButton: HTMLButtonElement = fixture.nativeElement.querySelector('.toggle-replies-btn');
+    const revealButton: HTMLButtonElement =
+      fixture.nativeElement.querySelector('.toggle-replies-btn');
     expect(revealButton.textContent?.trim()).toBe('Show reply');
     revealButton.click();
     fixture.detectChanges();
@@ -179,7 +194,8 @@ describe('CommentReplies', () => {
     const child = makeNode(2, { repliesTotalCount: 1, replies: [grandchild] });
     setNode(makeNode(1, { repliesTotalCount: 1, replies: [child] }));
 
-    const revealButton: HTMLButtonElement = fixture.nativeElement.querySelector('.toggle-replies-btn');
+    const revealButton: HTMLButtonElement =
+      fixture.nativeElement.querySelector('.toggle-replies-btn');
     revealButton.click();
     fixture.detectChanges();
 
@@ -212,5 +228,64 @@ describe('CommentReplies', () => {
       fixture.nativeElement.querySelectorAll('.reply-to-label');
     const labels = Array.from(labelElements).map((el) => el.textContent?.trim());
     expect(labels).toEqual(['↳ Reply to bob', '↳ Reply to carol']);
+  });
+
+  it("clicking Reply on a preview item opens the modal with that reply's own id, not the parent's", () => {
+    modalService.open.mockReturnValue({ onClose: of(undefined) });
+    const preview = [makeNode(2, { authorName: 'preview-author' })];
+    setNode(makeNode(1, { repliesTotalCount: 1, replies: preview }));
+
+    const button: HTMLButtonElement = fixture.nativeElement.querySelector('.reply-btn');
+    button.click();
+
+    expect(modalService.open).toHaveBeenCalledWith(
+      CommentFormComponent,
+      expect.objectContaining({ data: { parentId: 2, parentAuthorName: 'preview-author' } }),
+    );
+  });
+
+  it('receiveNewReply expands the thread and prepends the new reply (repliesKnown case)', () => {
+    const existing = makeNode(2);
+    setNode(makeNode(1, { repliesTotalCount: 1, replies: [existing] }));
+    const component = fixture.componentInstance;
+
+    component.receiveNewReply(makeNode(99, { authorName: 'newbie' }));
+    fixture.detectChanges();
+
+    expect(component.expanded()).toBe(true);
+    expect(component.repliesTotalCount()).toBe(2);
+    const cards = fixture.nativeElement.querySelectorAll('.reply-card');
+    expect(cards[0].textContent).toContain('newbie');
+  });
+
+  it('receiveNewReply also increments the total when the count was discovered (repliesKnown: false)', () => {
+    commentsService.getReplies.mockReturnValue(of(makeRepliesPage(0, 0)));
+    setNode(makeNode(1, { repliesKnown: false, replies: [], repliesTotalCount: 0 }));
+    const component = fixture.componentInstance;
+
+    component.receiveNewReply(makeNode(99));
+    fixture.detectChanges();
+
+    expect(component.repliesTotalCount()).toBe(1);
+    expect(component.expanded()).toBe(true);
+    expect(fixture.nativeElement.querySelectorAll('.reply-card')).toHaveLength(1);
+  });
+
+  it("wires each Reply button to its own sibling nested CommentReplies instance, not a sibling comment's", () => {
+    modalService.open.mockReturnValue({ onClose: of(makeNode(999, { authorName: 'zzz' })) });
+    const childA = makeNode(2, { authorName: 'childA', repliesTotalCount: 0, replies: [] });
+    const childB = makeNode(3, { authorName: 'childB', repliesTotalCount: 0, replies: [] });
+    setNode(makeNode(1, { repliesTotalCount: 2, replies: [childA, childB] }));
+
+    const buttons: NodeListOf<HTMLButtonElement> =
+      fixture.nativeElement.querySelectorAll('.reply-btn');
+    expect(buttons).toHaveLength(2);
+
+    buttons[1].click();
+    fixture.detectChanges();
+
+    const topLevelCards = fixture.nativeElement.querySelector('ul.reply-list').children;
+    expect(topLevelCards[0].textContent).not.toContain('zzz');
+    expect(topLevelCards[1].textContent).toContain('zzz');
   });
 });

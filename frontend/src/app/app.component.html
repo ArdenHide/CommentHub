@@ -1,1 +1,2 @@
-<app-comments-page></app-comments-page>
+<app-site-header (commentPosted)="commentsPageRef.prependComment($event)" />
+<app-comments-page #commentsPageRef />

@@ -23,13 +23,18 @@
             <div class="flex-grow-1">
               <div class="d-flex justify-content-between align-items-baseline">
                 <h6 class="mb-0">{{ comment.authorName }}</h6>
-                <small class="text-muted">{{ comment.createdAt | date:'medium' }}</small>
+                <small class="text-muted">{{ comment.createdAt | date: 'medium' }}</small>
               </div>
-              <p class="mb-2 mt-1" [innerHTML]="comment.textHtml"></p>
-              <button type="button" class="btn btn-link btn-sm p-0" mdbRipple>
+              <p class="comment-text mb-2 mt-1" [innerHTML]="comment.textHtml"></p>
+              <button
+                type="button"
+                class="btn btn-link btn-sm p-0"
+                mdbRipple
+                (click)="onReply(comment, repliesRef)"
+              >
                 Reply
               </button>
-              <app-comment-replies [node]="comment" />
+              <app-comment-replies #repliesRef [node]="comment" />
             </div>
           </div>
         </li>

@@ -13,13 +13,18 @@
             <div class="flex-grow-1">
               <div class="d-flex justify-content-between align-items-baseline">
                 <h6 class="mb-0">{{ reply.authorName }}</h6>
-                <small class="text-muted">{{ reply.createdAt | date:'medium' }}</small>
+                <small class="text-muted">{{ reply.createdAt | date: 'medium' }}</small>
               </div>
-              <p class="mb-1 mt-1" [innerHTML]="reply.textHtml"></p>
-              <button type="button" class="btn btn-link btn-sm p-0 reply-btn" mdbRipple>
+              <p class="comment-text mb-1 mt-1" [innerHTML]="reply.textHtml"></p>
+              <button
+                type="button"
+                class="btn btn-link btn-sm p-0 reply-btn"
+                mdbRipple
+                (click)="onReply(reply, repliesRef)"
+              >
                 Reply
               </button>
-              <app-comment-replies [node]="reply" [depth]="1" />
+              <app-comment-replies #repliesRef [node]="reply" [depth]="1" />
             </div>
           </div>
         </li>
@@ -41,13 +46,18 @@
                 [size]="32"
               />
               <h6 class="mb-0">{{ reply.authorName }}</h6>
-              <small class="text-muted ms-auto">{{ reply.createdAt | date:'medium' }}</small>
+              <small class="text-muted ms-auto">{{ reply.createdAt | date: 'medium' }}</small>
             </div>
-            <p class="mb-1 mt-1" [innerHTML]="reply.textHtml"></p>
-            <button type="button" class="btn btn-link btn-sm p-0 reply-btn" mdbRipple>
+            <p class="comment-text mb-1 mt-1" [innerHTML]="reply.textHtml"></p>
+            <button
+              type="button"
+              class="btn btn-link btn-sm p-0 reply-btn"
+              mdbRipple
+              (click)="onReply(reply, repliesRef)"
+            >
               Reply
             </button>
-            <app-comment-replies [node]="reply" [depth]="depth() + 1" />
+            <app-comment-replies #repliesRef [node]="reply" [depth]="depth() + 1" />
           </li>
         }
       </ul>

@@ -1,4 +1,5 @@
 import { CommentNodeDto, RepliesPageDto } from './graphql/get-comments.query';
+import { AddedCommentDto } from './graphql/add-comment.mutation';
 
 export interface CommentNode {
   id: number;
@@ -27,5 +28,18 @@ export function mapCommentNode(dto: CommentNodeDto): CommentNode {
     replies: repliesKnown ? mapRepliesPage(dto.replies!) : [],
     repliesTotalCount: repliesKnown ? dto.replies!.totalCount : 0,
     repliesKnown,
+  };
+}
+
+export function mapNewComment(dto: AddedCommentDto): CommentNode {
+  return {
+    id: dto.id,
+    authorName: dto.user.userName,
+    avatarSeed: dto.user.avatarSeed,
+    textHtml: dto.textHtml,
+    createdAt: dto.createdAt,
+    replies: [],
+    repliesTotalCount: 0,
+    repliesKnown: true,
   };
 }

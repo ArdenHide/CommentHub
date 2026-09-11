@@ -15,8 +15,19 @@ public static class CommentTextValidator
     private static readonly HashSet<string> AllowedLinkAttributes = ["href", "title"];
     private static readonly HashSet<string> AllowedSchemes = ["http", "https", "mailto"];
 
+    /// <summary>
+    /// Attributes the sanitizer may see on output. Includes <c>rel</c>, which
+    /// <see cref="AddNofollowToLinks"/> stamps onto every link after validation — <c>rel</c> is
+    /// never accepted from user input (it's absent from <see cref="AllowedLinkAttributes"/>), so a
+    /// submitted value can never survive validation to be overwritten here.
+    /// </summary>
+    private static readonly HashSet<string> AllowedOutputLinkAttributes = [.. AllowedLinkAttributes, "rel"];
+
     private static readonly string AllowedTagsList = string.Join(", ", AllowedTags);
     private static readonly string AllowedSchemesList = string.Join(", ", AllowedSchemes);
+
+    /// <summary>Every link is untrusted, user-submitted content: it carries no SEO weight for us.</summary>
+    private const string LinkRel = "nofollow ugc";
 
     public static bool TryValidateAndSanitize(string text, out string sanitizedHtml, out string? error)
     {
@@ -32,7 +43,9 @@ public static class CommentTextValidator
             return false;
         }
 
-        return TrySanitize(text, out sanitizedHtml, out error);
+        AddNofollowToLinks(root);
+
+        return TrySanitize(SerializeChildren(root), out sanitizedHtml, out error);
     }
 
     private static bool TryParseWellFormed(string text, out XElement root, out string? error)
@@ -98,6 +111,33 @@ public static class CommentTextValidator
     private static bool HasAllowedScheme(string href)
         => Uri.TryCreate(href, UriKind.Absolute, out var uri) && AllowedSchemes.Contains(uri.Scheme);
 
+    private static void AddNofollowToLinks(XElement root)
+    {
+        foreach (var link in root.Descendants("a"))
+        {
+            link.SetAttributeValue("rel", LinkRel);
+        }
+    }
+
+    private static string SerializeChildren(XElement root)
+    {
+        using var writer = new StringWriter();
+        using var xmlWriter = XmlWriter.Create(writer, new XmlWriterSettings
+        {
+            OmitXmlDeclaration = true,
+            ConformanceLevel = ConformanceLevel.Fragment,
+            Indent = false,
+        });
+
+        foreach (var node in root.Nodes())
+        {
+            node.WriteTo(xmlWriter);
+        }
+
+        xmlWriter.Flush();
+        return writer.ToString();
+    }
+
     /// <summary>
     /// Defense in depth: sanitizes the already-validated markup with the same whitelist through
     /// a dedicated library. If it still removes anything, the input is treated as invalid rather
@@ -109,7 +149,7 @@ public static class CommentTextValidator
         sanitizer.AllowedTags.Clear();
         sanitizer.AllowedTags.UnionWith(AllowedTags);
         sanitizer.AllowedAttributes.Clear();
-        sanitizer.AllowedAttributes.UnionWith(AllowedLinkAttributes);
+        sanitizer.AllowedAttributes.UnionWith(AllowedOutputLinkAttributes);
         sanitizer.AllowedSchemes.Clear();
         sanitizer.AllowedSchemes.UnionWith(AllowedSchemes);
         sanitizer.AllowedCssProperties.Clear();
