@@ -1,10 +1,12 @@
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { DatePipe } from '@angular/common';
+import { MdbModalService } from 'mdb-angular-ui-kit/modal';
 import { MdbRippleModule } from 'mdb-angular-ui-kit/ripple';
 import { CommentsService } from './comments.service';
 import { CommentNode, mapCommentNode } from './comment-node.mapper';
 import { CommentReplies } from './comment-replies/comment-replies.component';
 import { CommentAvatar } from './comment-avatar/comment-avatar.component';
+import { CommentFormComponent } from './comment-form/comment-form.component';
 
 const PAGE_SIZE = 25;
 
@@ -18,6 +20,7 @@ export type CommentItem = CommentNode;
 })
 export class CommentsPage implements OnInit {
   private readonly commentsService = inject(CommentsService);
+  private readonly modalService = inject(MdbModalService);
 
   readonly comments = signal<CommentItem[]>([]);
   readonly totalCount = signal(0);
@@ -47,6 +50,25 @@ export class CommentsPage implements OnInit {
         this.error.set('Failed to load comments. Please try again.');
         this.loading.set(false);
       },
+    });
+  }
+
+  prependComment(node: CommentItem): void {
+    this.comments.update((current) => [node, ...current]);
+    this.totalCount.update((count) => count + 1);
+  }
+
+  onReply(comment: CommentItem, repliesRef: CommentReplies): void {
+    const modalRef = this.modalService.open(CommentFormComponent, {
+      modalClass: 'modal-lg modal-dialog-centered',
+      keyboard: true,
+      data: { parentId: comment.id, parentAuthorName: comment.authorName },
+    });
+
+    modalRef.onClose.subscribe((newReply: CommentNode | undefined) => {
+      if (newReply) {
+        repliesRef.receiveNewReply(newReply);
+      }
     });
   }
 }

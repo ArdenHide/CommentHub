@@ -1,0 +1,161 @@
+<div class="modal-header">
+  <h5 class="modal-title">
+    {{ parentId === null ? 'New comment' : 'Reply to ' + (parentAuthorName ?? 'comment') }}
+  </h5>
+  <button type="button" class="btn-close" aria-label="Close" (click)="cancel()"></button>
+</div>
+
+<form [formGroup]="form" (ngSubmit)="submit()">
+  <div class="modal-body">
+    @if (formError()) {
+      <div class="alert alert-danger py-1 px-2 small" role="alert">{{ formError() }}</div>
+    }
+
+    <div class="mb-3">
+      <label class="form-label" for="cf-email">Email</label>
+      <input
+        id="cf-email"
+        type="email"
+        class="form-control"
+        [class.is-invalid]="isInvalid('email')"
+        formControlName="email"
+      />
+      @if (isInvalid('email')) {
+        <div class="invalid-feedback">{{ errorMessage('email') }}</div>
+      }
+    </div>
+
+    <div class="mb-3">
+      <label class="form-label" for="cf-username">Name</label>
+      <input
+        id="cf-username"
+        type="text"
+        class="form-control"
+        [class.is-invalid]="isInvalid('userName')"
+        formControlName="userName"
+      />
+      @if (matchedIdentity()) {
+        <div class="form-text">Using your saved name and home page for this email.</div>
+      }
+      @if (isInvalid('userName')) {
+        <div class="invalid-feedback">{{ errorMessage('userName') }}</div>
+      }
+    </div>
+
+    <div class="mb-3">
+      <label class="form-label" for="cf-homepage">Home page (optional)</label>
+      <input
+        id="cf-homepage"
+        type="url"
+        class="form-control"
+        [class.is-invalid]="isInvalid('homePage')"
+        formControlName="homePage"
+      />
+      @if (isInvalid('homePage')) {
+        <div class="invalid-feedback">{{ errorMessage('homePage') }}</div>
+      }
+    </div>
+
+    <div class="mb-3">
+      <label class="form-label d-block" for="cf-text">Comment</label>
+
+      <div class="btn-toolbar mb-1" role="toolbar" aria-label="Formatting">
+        <button
+          type="button"
+          class="btn btn-outline-secondary btn-sm me-1"
+          mdbRipple
+          (mousedown)="$event.preventDefault()"
+          (click)="wrapSelection('<strong>', '</strong>')"
+          aria-label="Bold"
+        >
+          <i class="fa fa-bold"></i>
+        </button>
+        <button
+          type="button"
+          class="btn btn-outline-secondary btn-sm me-1"
+          mdbRipple
+          (mousedown)="$event.preventDefault()"
+          (click)="wrapSelection('<i>', '</i>')"
+          aria-label="Italic"
+        >
+          <i class="fa fa-italic"></i>
+        </button>
+        <button
+          type="button"
+          class="btn btn-outline-secondary btn-sm me-1"
+          mdbRipple
+          (mousedown)="$event.preventDefault()"
+          (click)="wrapSelection('<code>', '</code>', true)"
+          aria-label="Code"
+        >
+          <i class="fa fa-code"></i>
+        </button>
+        <button
+          type="button"
+          class="btn btn-outline-secondary btn-sm"
+          mdbRipple
+          (mousedown)="$event.preventDefault()"
+          (click)="toggleLinkPrompt()"
+          aria-label="Link"
+        >
+          <i class="fa fa-link"></i>
+        </button>
+      </div>
+
+      @if (linkPromptOpen()) {
+        <div class="d-flex gap-2 mb-2 link-prompt">
+          <input
+            type="text"
+            class="form-control form-control-sm"
+            placeholder="https://example.com"
+            [value]="linkHref()"
+            (input)="linkHref.set($any($event.target).value)"
+          />
+          <input
+            type="text"
+            class="form-control form-control-sm"
+            placeholder="Title (optional)"
+            [value]="linkTitle()"
+            (input)="linkTitle.set($any($event.target).value)"
+          />
+          <button type="button" class="btn btn-primary btn-sm" mdbRipple (click)="insertLink()">
+            Insert
+          </button>
+          <button
+            type="button"
+            class="btn btn-link btn-sm"
+            mdbRipple
+            (click)="linkPromptOpen.set(false)"
+          >
+            Cancel
+          </button>
+        </div>
+      }
+
+      <textarea
+        id="cf-text"
+        #textArea
+        class="form-control"
+        rows="5"
+        [class.is-invalid]="isInvalid('text')"
+        formControlName="text"
+      ></textarea>
+      <div class="form-text">
+        Allowed tags: &lt;a href title&gt;, &lt;code&gt;, &lt;i&gt;, &lt;strong&gt;. Typed by hand
+        outside the toolbar, &lt;, &gt; and &amp; must be escaped (e.g. &amp;lt;).
+      </div>
+      @if (isInvalid('text')) {
+        <div class="invalid-feedback d-block">{{ errorMessage('text') }}</div>
+      }
+    </div>
+  </div>
+
+  <div class="modal-footer">
+    <button type="button" class="btn btn-outline-secondary" mdbRipple (click)="cancel()">
+      Cancel
+    </button>
+    <button type="submit" class="btn btn-primary" mdbRipple [disabled]="submitting()">
+      {{ submitting() ? 'Posting…' : 'Post comment' }}
+    </button>
+  </div>
+</form>

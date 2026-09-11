@@ -105,6 +105,20 @@ public sealed class CommentMutationsTests(PostgresFixture postgres) : IAsyncLife
         Assert.Equal(2, await dbContext.Comments.CountAsync());
     }
 
+    [Fact]
+    public async Task Stamps_links_with_rel_nofollow_ugc_regardless_of_what_was_submitted()
+    {
+        var input = BuildInput(text: "<a href=\"https://example.com\">link</a>");
+
+        using var result = await _client.PostGraphQLAsync(Mutation, new { input });
+        var comment = result.RootElement.GetProperty("data").GetProperty("addComment").GetProperty("comment");
+
+        Assert.Equal(
+            "<a href=\"https://example.com\" rel=\"nofollow ugc\">link</a>",
+            comment.GetProperty("textHtml").GetString()
+        );
+    }
+
     [Theory]
     [InlineData("userName", "not latin", "alice@example.com", null, "<p>ok</p>")]
     [InlineData("email", "alice", "not-an-email", null, "<p>ok</p>")]
@@ -114,6 +128,7 @@ public sealed class CommentMutationsTests(PostgresFixture postgres) : IAsyncLife
     [InlineData("text", "alice", "alice@example.com", null, "<p>unclosed")]
     [InlineData("text", "alice", "alice@example.com", null, "<a onclick=\"evil()\">x</a>")]
     [InlineData("text", "alice", "alice@example.com", null, "<a href=\"javascript:alert(1)\">x</a>")]
+    [InlineData("text", "alice", "alice@example.com", null, "<a href=\"https://example.com\" rel=\"dofollow\">x</a>")]
     public async Task Rejects_invalid_input_without_persisting_anything(
         string expectedField,
         string userName,

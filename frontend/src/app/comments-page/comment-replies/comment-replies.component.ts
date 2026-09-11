@@ -1,9 +1,11 @@
 import { Component, computed, effect, inject, input, signal } from '@angular/core';
 import { DatePipe } from '@angular/common';
+import { MdbModalService } from 'mdb-angular-ui-kit/modal';
 import { MdbRippleModule } from 'mdb-angular-ui-kit/ripple';
 import { CommentNode, mapRepliesPage } from '../comment-node.mapper';
 import { CommentsService } from '../comments.service';
 import { CommentAvatar } from '../comment-avatar/comment-avatar.component';
+import { CommentFormComponent } from '../comment-form/comment-form.component';
 
 const PREVIEW_SIZE = 1;
 
@@ -15,6 +17,7 @@ const PREVIEW_SIZE = 1;
 })
 export class CommentReplies {
   private readonly commentsService = inject(CommentsService);
+  private readonly modalService = inject(MdbModalService);
   private discoveryRequested = false;
 
   readonly node = input.required<CommentNode>();
@@ -27,10 +30,14 @@ export class CommentReplies {
 
   private readonly discoveredPreview = signal<CommentNode[] | null>(null);
   private readonly discoveredTotalCount = signal<number | null>(null);
+  private readonly addedRepliesCount = signal(0);
 
-  readonly repliesTotalCount = computed(() =>
-    this.node().repliesKnown ? this.node().repliesTotalCount : (this.discoveredTotalCount() ?? 0),
-  );
+  readonly repliesTotalCount = computed(() => {
+    const known = this.node().repliesKnown
+      ? this.node().repliesTotalCount
+      : (this.discoveredTotalCount() ?? 0);
+    return known + this.addedRepliesCount();
+  });
 
   readonly toggleVisible = computed(() =>
     this.depth() === 0 ? this.repliesTotalCount() > 1 : this.repliesTotalCount() > 0,
@@ -116,5 +123,29 @@ export class CommentReplies {
         this.loading.set(false);
       },
     });
+  }
+
+  onReply(reply: CommentNode, repliesRef: CommentReplies): void {
+    const modalRef = this.modalService.open(CommentFormComponent, {
+      modalClass: 'modal-lg modal-dialog-centered',
+      keyboard: true,
+      data: { parentId: reply.id, parentAuthorName: reply.authorName },
+    });
+
+    modalRef.onClose.subscribe((newReply: CommentNode | undefined) => {
+      if (newReply) {
+        repliesRef.receiveNewReply(newReply);
+      }
+    });
+  }
+
+  receiveNewReply(newReply: CommentNode): void {
+    const currentlyVisible =
+      this.fullReplies() ??
+      (this.node().repliesKnown ? this.node().replies : (this.discoveredPreview() ?? []));
+
+    this.fullReplies.set([newReply, ...currentlyVisible]);
+    this.addedRepliesCount.update((count) => count + 1);
+    this.expanded.set(true);
   }
 }
