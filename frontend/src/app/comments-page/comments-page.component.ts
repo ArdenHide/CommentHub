@@ -4,13 +4,14 @@ import { MdbRippleModule } from 'mdb-angular-ui-kit/ripple';
 import { CommentsService } from './comments.service';
 import { CommentNode, mapCommentNode } from './comment-node.mapper';
 import { CommentReplies } from './comment-replies/comment-replies.component';
+import { CommentAvatar } from './comment-avatar/comment-avatar.component';
 
 const PAGE_SIZE = 25;
 
 export type CommentItem = CommentNode;
 
 @Component({
-  imports: [DatePipe, MdbRippleModule, CommentReplies],
+  imports: [DatePipe, MdbRippleModule, CommentReplies, CommentAvatar],
   selector: 'app-comments-page',
   styleUrl: './comments-page.component.scss',
   templateUrl: './comments-page.component.html',

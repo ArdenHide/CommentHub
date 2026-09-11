@@ -13,6 +13,7 @@ export const GET_COMMENT_REPLIES_QUERY = gql`
           user {
             userName
             homePage
+            avatarSeed
           }
           replies(take: 1, descending: true) {
             totalCount
@@ -23,6 +24,7 @@ export const GET_COMMENT_REPLIES_QUERY = gql`
               user {
                 userName
                 homePage
+                avatarSeed
               }
             }
           }
