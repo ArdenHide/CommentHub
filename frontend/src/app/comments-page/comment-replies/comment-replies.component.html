@@ -4,12 +4,12 @@
       @for (reply of visibleReplies(); track reply.id) {
         <li class="list-group-item reply-card px-0 py-2">
           <div class="d-flex">
-            <div
-              class="avatar-circle avatar-circle--sm flex-shrink-0 me-2"
-              [style.background-color]="reply.avatarColor"
-            >
-              {{ reply.authorInitials }}
-            </div>
+            <app-comment-avatar
+              class="flex-shrink-0 me-2"
+              [seed]="reply.avatarSeed"
+              [authorName]="reply.authorName"
+              [size]="32"
+            />
             <div class="flex-grow-1">
               <div class="d-flex justify-content-between align-items-baseline">
                 <h6 class="mb-0">{{ reply.authorName }}</h6>
@@ -34,12 +34,12 @@
               ↳ Reply to {{ node().authorName }}
             </small>
             <div class="d-flex align-items-center gap-2">
-              <div
-                class="avatar-circle avatar-circle--sm flex-shrink-0"
-                [style.background-color]="reply.avatarColor"
-              >
-                {{ reply.authorInitials }}
-              </div>
+              <app-comment-avatar
+                class="flex-shrink-0"
+                [seed]="reply.avatarSeed"
+                [authorName]="reply.authorName"
+                [size]="32"
+              />
               <h6 class="mb-0">{{ reply.authorName }}</h6>
               <small class="text-muted ms-auto">{{ reply.createdAt | date:'medium' }}</small>
             </div>

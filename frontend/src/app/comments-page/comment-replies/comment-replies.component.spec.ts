@@ -9,8 +9,7 @@ function makeNode(id: number, overrides: Partial<CommentNode> = {}): CommentNode
   return {
     id,
     authorName: `User ${id}`,
-    authorInitials: `U${id}`,
-    avatarColor: '#3b71ca',
+    avatarSeed: `seed-${id}`,
     textHtml: `<p>Reply ${id}</p>`,
     createdAt: '2026-09-08T10:15:00Z',
     replies: [],
@@ -27,7 +26,7 @@ function makeRepliesPage(count: number, totalCount: number): RepliesPageDto {
       id: i + 1,
       textHtml: `<p>Full reply ${i + 1}</p>`,
       createdAt: '2026-09-08T10:15:00Z',
-      user: { userName: `User ${i + 1}`, homePage: null },
+      user: { userName: `User ${i + 1}`, homePage: null, avatarSeed: `seed-${i + 1}` },
       replies: { totalCount: 0, items: [] },
     })),
   };

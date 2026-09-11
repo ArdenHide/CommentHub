@@ -284,4 +284,36 @@ public sealed class CommentQueriesTests(PostgresFixture postgres) : IAsyncLifeti
         Assert.DoesNotContain("email", fieldNames);
         Assert.Contains("userName", fieldNames);
     }
+
+    [Fact]
+    public async Task User_exposes_a_stable_avatar_seed_without_leaking_the_email()
+    {
+        const string query = """
+            {
+              comments(take: 2) {
+                items { user { userName avatarSeed } }
+              }
+            }
+            """;
+
+        using var first = await _client.PostGraphQLAsync(query);
+        using var second = await _client.PostGraphQLAsync(query);
+
+        var firstItems = first.RootElement.GetProperty("data").GetProperty("comments")
+            .GetProperty("items").EnumerateArray().ToArray();
+        var secondItems = second.RootElement.GetProperty("data").GetProperty("comments")
+            .GetProperty("items").EnumerateArray().ToArray();
+
+        Assert.Equal("bob", firstItems[0].GetProperty("user").GetProperty("userName").GetString());
+        Assert.Equal("alice", firstItems[1].GetProperty("user").GetProperty("userName").GetString());
+
+        var bobSeedFirst = firstItems[0].GetProperty("user").GetProperty("avatarSeed").GetString();
+        var aliceSeedFirst = firstItems[1].GetProperty("user").GetProperty("avatarSeed").GetString();
+        var bobSeedSecond = secondItems[0].GetProperty("user").GetProperty("avatarSeed").GetString();
+
+        Assert.Equal(bobSeedFirst, bobSeedSecond);
+        Assert.NotEqual(aliceSeedFirst, bobSeedFirst);
+        Assert.DoesNotContain("bob", bobSeedFirst, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("example.com", bobSeedFirst, StringComparison.OrdinalIgnoreCase);
+    }
 }

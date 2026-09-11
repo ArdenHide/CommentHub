@@ -17,6 +17,7 @@ export const GET_COMMENTS_QUERY = gql`
     user {
       userName
       homePage
+      avatarSeed
     }
     replies(take: 1, descending: true) {
       totalCount
@@ -27,6 +28,7 @@ export const GET_COMMENTS_QUERY = gql`
         user {
           userName
           homePage
+          avatarSeed
         }
         replies(take: 1, descending: true) {
           totalCount
@@ -37,6 +39,7 @@ export const GET_COMMENTS_QUERY = gql`
             user {
               userName
               homePage
+              avatarSeed
             }
           }
         }
@@ -48,6 +51,7 @@ export const GET_COMMENTS_QUERY = gql`
 export interface UserDto {
   userName: string;
   homePage: string | null;
+  avatarSeed: string;
 }
 
 export interface RepliesPageDto {

@@ -3,11 +3,12 @@ import { DatePipe } from '@angular/common';
 import { MdbRippleModule } from 'mdb-angular-ui-kit/ripple';
 import { CommentNode, mapRepliesPage } from '../comment-node.mapper';
 import { CommentsService } from '../comments.service';
+import { CommentAvatar } from '../comment-avatar/comment-avatar.component';
 
 const PREVIEW_SIZE = 1;
 
 @Component({
-  imports: [DatePipe, MdbRippleModule, CommentReplies],
+  imports: [DatePipe, MdbRippleModule, CommentReplies, CommentAvatar],
   selector: 'app-comment-replies',
   styleUrl: './comment-replies.component.scss',
   templateUrl: './comment-replies.component.html',

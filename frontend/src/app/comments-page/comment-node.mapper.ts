@@ -1,11 +1,9 @@
-import { getAuthorInitials, getAvatarColor } from './comment-avatar.util';
 import { CommentNodeDto, RepliesPageDto } from './graphql/get-comments.query';
 
 export interface CommentNode {
   id: number;
   authorName: string;
-  authorInitials: string;
-  avatarColor: string;
+  avatarSeed: string;
   textHtml: string;
   createdAt: string;
   replies: CommentNode[];
@@ -23,8 +21,7 @@ export function mapCommentNode(dto: CommentNodeDto): CommentNode {
   return {
     id: dto.id,
     authorName: dto.user.userName,
-    authorInitials: getAuthorInitials(dto.user.userName),
-    avatarColor: getAvatarColor(dto.user.userName),
+    avatarSeed: dto.user.avatarSeed,
     textHtml: dto.textHtml,
     createdAt: dto.createdAt,
     replies: repliesKnown ? mapRepliesPage(dto.replies!) : [],
