@@ -258,6 +258,25 @@ describe('CommentReplies', () => {
     expect(cards[0].textContent).toContain('newbie');
   });
 
+  it('keeps showing the newly added reply in the collapsed preview after Show less', () => {
+    const existing = makeNode(2, { authorName: 'old-timer' });
+    setNode(makeNode(1, { repliesTotalCount: 1, replies: [existing] }));
+    const component = fixture.componentInstance;
+
+    component.receiveNewReply(makeNode(99, { authorName: 'newbie' }));
+    fixture.detectChanges();
+
+    const button: HTMLButtonElement = fixture.nativeElement.querySelector('.toggle-replies-btn');
+    button.click();
+    fixture.detectChanges();
+
+    expect(component.expanded()).toBe(false);
+    const cards = fixture.nativeElement.querySelectorAll('.reply-card');
+    expect(cards).toHaveLength(1);
+    expect(cards[0].textContent).toContain('newbie');
+    expect(fixture.nativeElement.textContent).toContain('Show all (2 replies)');
+  });
+
   it('receiveNewReply also increments the total when the count was discovered (repliesKnown: false)', () => {
     commentsService.getReplies.mockReturnValue(of(makeRepliesPage(0, 0)));
     setNode(makeNode(1, { repliesKnown: false, replies: [], repliesTotalCount: 0 }));
