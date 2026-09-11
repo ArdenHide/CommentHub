@@ -65,6 +65,11 @@ export class CommentReplies {
       return [];
     }
 
+    const reconciled = this.fullReplies();
+    if (reconciled) {
+      return reconciled.slice(0, PREVIEW_SIZE);
+    }
+
     return this.node().repliesKnown ? this.node().replies : (this.discoveredPreview() ?? []);
   });
 
