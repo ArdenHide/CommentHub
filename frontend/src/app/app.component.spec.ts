@@ -1,10 +1,18 @@
 import { TestBed } from '@angular/core/testing';
+import { of } from 'rxjs';
 import { App } from './app.component';
+import { CommentsService } from './comments-page/comments.service';
 
 describe('App', () => {
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       imports: [App],
+      providers: [
+        {
+          provide: CommentsService,
+          useValue: { getComments: () => of({ totalCount: 0, items: [] }) },
+        },
+      ],
     })
       .compileComponents();
   });
