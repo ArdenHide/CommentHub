@@ -12,6 +12,7 @@ function makePage(count: number, totalCount: number, offset = 0): CommentsPageDt
       textHtml: `<p>Comment ${offset + i + 1}</p>`,
       createdAt: '2026-09-08T10:15:00Z',
       user: { userName: `User ${offset + i + 1}`, homePage: null },
+      replies: { totalCount: 0, items: [] },
     })),
   };
 }

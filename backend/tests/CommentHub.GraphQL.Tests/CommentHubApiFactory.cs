@@ -8,10 +8,16 @@ public sealed class CommentHubApiFactory(string connectionString) : WebApplicati
 {
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
+        builder.UseEnvironment("Development");
+
         builder.ConfigureAppConfiguration((_, config) =>
         {
             config.AddInMemoryCollection(
-                new Dictionary<string, string?> { ["ConnectionStrings:CommentHub"] = connectionString }
+                new Dictionary<string, string?>
+                {
+                    ["ConnectionStrings:CommentHub"] = connectionString,
+                    ["SeedDevData"] = "false",
+                }
             );
         });
     }

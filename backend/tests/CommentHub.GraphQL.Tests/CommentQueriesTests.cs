@@ -188,6 +188,34 @@ public sealed class CommentQueriesTests(PostgresFixture postgres) : IAsyncLifeti
         Assert.Equal("<p>reply3</p>", page2Items[0].GetProperty("textHtml").GetString());
     }
 
+    [Fact]
+    public async Task Replies_can_be_requested_newest_first_without_affecting_total_count()
+    {
+        const string query = """
+            query {
+              comments(take: 2) {
+                items {
+                  textHtml
+                  replies(take: 2, descending: true) {
+                    totalCount
+                    items { textHtml }
+                  }
+                }
+              }
+            }
+            """;
+
+        using var result = await _client.PostGraphQLAsync(query);
+        var root1Node = FindItemByText(result, "<p>root1</p>");
+        var replies = root1Node.GetProperty("replies");
+        var items = replies.GetProperty("items").EnumerateArray().ToArray();
+
+        Assert.Equal(3, replies.GetProperty("totalCount").GetInt32());
+        Assert.Equal(2, items.Length);
+        Assert.Equal("<p>reply3</p>", items[0].GetProperty("textHtml").GetString());
+        Assert.Equal("<p>reply2</p>", items[1].GetProperty("textHtml").GetString());
+    }
+
     private static System.Text.Json.JsonElement FindItemByText(System.Text.Json.JsonDocument response, string textHtml)
         => response.RootElement.GetProperty("data").GetProperty("comments").GetProperty("items")
             .EnumerateArray()

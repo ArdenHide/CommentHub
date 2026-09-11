@@ -2,21 +2,15 @@ import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { MdbRippleModule } from 'mdb-angular-ui-kit/ripple';
 import { CommentsService } from './comments.service';
-import { getAuthorInitials, getAvatarColor } from './comment-avatar.util';
+import { CommentNode, mapCommentNode } from './comment-node.mapper';
+import { CommentReplies } from './comment-replies/comment-replies.component';
 
 const PAGE_SIZE = 25;
 
-export interface CommentItem {
-  id: number;
-  authorName: string;
-  authorInitials: string;
-  avatarColor: string;
-  textHtml: string;
-  createdAt: string;
-}
+export type CommentItem = CommentNode;
 
 @Component({
-  imports: [DatePipe, MdbRippleModule],
+  imports: [DatePipe, MdbRippleModule, CommentReplies],
   selector: 'app-comments-page',
   styleUrl: './comments-page.component.scss',
   templateUrl: './comments-page.component.html',
@@ -42,14 +36,7 @@ export class CommentsPage implements OnInit {
 
     this.commentsService.getComments(this.comments().length, PAGE_SIZE).subscribe({
       next: (page) => {
-        const items = page.items.map((comment) => ({
-          id: comment.id,
-          authorName: comment.user.userName,
-          authorInitials: getAuthorInitials(comment.user.userName),
-          avatarColor: getAvatarColor(comment.user.userName),
-          textHtml: comment.textHtml,
-          createdAt: comment.createdAt,
-        }));
+        const items = page.items.map(mapCommentNode);
 
         this.comments.update((current) => [...current, ...items]);
         this.totalCount.set(page.totalCount);

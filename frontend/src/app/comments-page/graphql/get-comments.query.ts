@@ -5,12 +5,40 @@ export const GET_COMMENTS_QUERY = gql`
     comments(skip: $skip, take: $take) {
       totalCount
       items {
+        ...CommentNodeFields
+      }
+    }
+  }
+
+  fragment CommentNodeFields on Comment {
+    id
+    textHtml
+    createdAt
+    user {
+      userName
+      homePage
+    }
+    replies(take: 1, descending: true) {
+      totalCount
+      items {
         id
         textHtml
         createdAt
         user {
           userName
           homePage
+        }
+        replies(take: 1, descending: true) {
+          totalCount
+          items {
+            id
+            textHtml
+            createdAt
+            user {
+              userName
+              homePage
+            }
+          }
         }
       }
     }
@@ -22,12 +50,20 @@ export interface UserDto {
   homePage: string | null;
 }
 
-export interface CommentDto {
+export interface RepliesPageDto {
+  totalCount: number;
+  items: CommentNodeDto[];
+}
+
+export interface CommentNodeDto {
   id: number;
   textHtml: string;
   createdAt: string;
   user: UserDto;
+  replies?: RepliesPageDto;
 }
+
+export type CommentDto = CommentNodeDto;
 
 export interface CommentsPageDto {
   totalCount: number;

@@ -21,11 +21,13 @@ public static partial class CommentType
         IRepliesByParentIdDataLoader repliesByParentId,
         CancellationToken cancellationToken,
         int skip = 0,
-        int take = 5
+        int take = 5,
+        bool descending = false
     )
     {
         var allReplies = await repliesByParentId.LoadAsync(comment.Id, cancellationToken) ?? [];
+        IEnumerable<Comment> ordered = descending ? allReplies.AsEnumerable().Reverse() : allReplies;
 
-        return new CommentPage(allReplies.Skip(skip).Take(take).ToList(), allReplies.Count);
+        return new CommentPage(ordered.Skip(skip).Take(take).ToList(), allReplies.Count);
     }
 }

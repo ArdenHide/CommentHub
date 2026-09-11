@@ -6,7 +6,13 @@ import {
   GET_COMMENTS_QUERY,
   GetCommentsResult,
   GetCommentsVariables,
+  RepliesPageDto,
 } from './graphql/get-comments.query';
+import {
+  GET_COMMENT_REPLIES_QUERY,
+  GetCommentRepliesResult,
+  GetCommentRepliesVariables,
+} from './graphql/get-comment-replies.query';
 
 @Injectable({ providedIn: 'root' })
 export class CommentsService {
@@ -26,6 +32,29 @@ export class CommentsService {
           }
 
           return result.data.comments;
+        }),
+      );
+  }
+
+  getReplies(
+    commentId: number,
+    skip: number,
+    take: number,
+    descending = false,
+  ): Observable<RepliesPageDto> {
+    return this.apollo
+      .query<GetCommentRepliesResult, GetCommentRepliesVariables>({
+        query: GET_COMMENT_REPLIES_QUERY,
+        variables: { id: commentId, skip, take, descending },
+        fetchPolicy: 'network-only',
+      })
+      .pipe(
+        map((result) => {
+          if (!result.data?.comment) {
+            throw new Error('GetCommentReplies query returned no data');
+          }
+
+          return result.data.comment.replies;
         }),
       );
   }

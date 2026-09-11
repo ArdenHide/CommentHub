@@ -1,5 +1,8 @@
+using CommentHub.Database;
 using CommentHub.Database.DependencyInjection;
+using CommentHub.Database.Seeding;
 using CommentHub.GraphQL.DependencyInjection;
+using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -16,6 +19,14 @@ builder.Services.AddCors(options =>
 var app = builder.Build();
 
 app.UseCors();
+
+if (app.Environment.IsDevelopment() && app.Configuration.GetValue<bool>("SeedDevData"))
+{
+    using var scope = app.Services.CreateScope();
+    var dbContextFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<CommentHubDbContext>>();
+    await using var dbContext = await dbContextFactory.CreateDbContextAsync();
+    await DevDataSeeder.SeedAsync(dbContext);
+}
 
 app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
 app.MapGraphQL();
