@@ -1,14 +1,18 @@
-import { Component } from '@angular/core';
+import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { MdbRippleModule } from 'mdb-angular-ui-kit/ripple';
+import { CommentsService } from './comments.service';
+import { getAuthorInitials, getAvatarColor } from './comment-avatar.util';
+
+const PAGE_SIZE = 25;
 
 export interface CommentItem {
   id: number;
   authorName: string;
   authorInitials: string;
   avatarColor: string;
-  text: string;
-  createdAt: Date;
+  textHtml: string;
+  createdAt: string;
 }
 
 @Component({
@@ -17,31 +21,44 @@ export interface CommentItem {
   styleUrl: './comments-page.component.scss',
   templateUrl: './comments-page.component.html',
 })
-export class CommentsPage {
-  readonly comments: CommentItem[] = [
-    {
-      id: 1,
-      authorName: 'Alice Johnson',
-      authorInitials: 'AJ',
-      avatarColor: '#3b71ca',
-      text: 'This is a great article! Thanks for sharing your insights on Angular standalone components.',
-      createdAt: new Date('2026-09-08T10:15:00'),
-    },
-    {
-      id: 2,
-      authorName: 'Mark Petrov',
-      authorInitials: 'MP',
-      avatarColor: '#14a44d',
-      text: 'I have a question about the GraphQL integration mentioned in the second paragraph — could you elaborate?',
-      createdAt: new Date('2026-09-09T14:32:00'),
-    },
-    {
-      id: 3,
-      authorName: 'Yuki Tanaka',
-      authorInitials: 'YT',
-      avatarColor: '#e4a11b',
-      text: 'Nicely written and easy to follow. Looking forward to the next part of this series.',
-      createdAt: new Date('2026-09-10T09:05:00'),
-    },
-  ];
+export class CommentsPage implements OnInit {
+  private readonly commentsService = inject(CommentsService);
+
+  readonly comments = signal<CommentItem[]>([]);
+  readonly totalCount = signal(0);
+  readonly loading = signal(false);
+  readonly error = signal<string | null>(null);
+
+  readonly hasMore = computed(() => this.comments().length < this.totalCount());
+  readonly initialLoading = computed(() => this.loading() && this.comments().length === 0);
+
+  ngOnInit(): void {
+    this.loadMore();
+  }
+
+  loadMore(): void {
+    this.loading.set(true);
+    this.error.set(null);
+
+    this.commentsService.getComments(this.comments().length, PAGE_SIZE).subscribe({
+      next: (page) => {
+        const items = page.items.map((comment) => ({
+          id: comment.id,
+          authorName: comment.user.userName,
+          authorInitials: getAuthorInitials(comment.user.userName),
+          avatarColor: getAvatarColor(comment.user.userName),
+          textHtml: comment.textHtml,
+          createdAt: comment.createdAt,
+        }));
+
+        this.comments.update((current) => [...current, ...items]);
+        this.totalCount.set(page.totalCount);
+        this.loading.set(false);
+      },
+      error: () => {
+        this.error.set('Failed to load comments. Please try again.');
+        this.loading.set(false);
+      },
+    });
+  }
 }
