@@ -1,5 +1,7 @@
 using CommentHub.Database.Entities;
+using CommentHub.GraphQL.Services;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace CommentHub.GraphQL.Tests;
@@ -10,6 +12,7 @@ public sealed class CommentMutationsTests(PostgresFixture postgres) : IAsyncLife
     private readonly PostgresFixture _postgres = postgres;
     private CommentHubApiFactory _factory = null!;
     private HttpClient _client = null!;
+    private ICaptchaChallengeService _captcha = null!;
 
     public async ValueTask InitializeAsync()
     {
@@ -19,6 +22,7 @@ public sealed class CommentMutationsTests(PostgresFixture postgres) : IAsyncLife
 
         _factory = new CommentHubApiFactory(_postgres.ConnectionString);
         _client = _factory.CreateClient();
+        _captcha = _factory.Services.GetRequiredService<ICaptchaChallengeService>();
     }
 
     public async ValueTask DisposeAsync()
@@ -40,13 +44,25 @@ public sealed class CommentMutationsTests(PostgresFixture postgres) : IAsyncLife
         }
         """;
 
-    private static object BuildInput(
+    private object BuildInput(
         string userName = "alice",
         string email = "alice@example.com",
         string? homePage = null,
         string text = "hello",
-        long? parentId = null
-    ) => new { userName, email, homePage, text, parentId };
+        long? parentId = null,
+        (string Id, string Code)? captcha = null
+    )
+    {
+        var (captchaId, captchaCode) = captcha ?? GenerateValidCaptcha();
+        return new { userName, email, homePage, text, parentId, captchaId, captchaCode };
+    }
+
+    private (string Id, string Code) GenerateValidCaptcha()
+    {
+        var id = Guid.NewGuid().ToString();
+        var challenge = _captcha.Generate(id);
+        return (id, challenge.Code);
+    }
 
     [Fact]
     public async Task Creates_a_top_level_comment_and_a_new_user()
@@ -149,6 +165,44 @@ public sealed class CommentMutationsTests(PostgresFixture postgres) : IAsyncLife
 
         await using var dbContext = _postgres.CreateDbContext();
         Assert.Equal(0, await dbContext.Comments.CountAsync());
+    }
+
+    [Fact]
+    public async Task Rejects_an_incorrect_captcha_code_without_persisting_anything()
+    {
+        var input = BuildInput(captcha: (Guid.NewGuid().ToString(), "wrong-code"));
+
+        using var result = await _client.PostGraphQLAsync(Mutation, new { input });
+        var payload = result.RootElement.GetProperty("data").GetProperty("addComment");
+
+        Assert.Equal(System.Text.Json.JsonValueKind.Null, payload.GetProperty("comment").ValueKind);
+        var errors = payload.GetProperty("errors").EnumerateArray().ToArray();
+        Assert.Contains(
+            errors,
+            error =>
+                error.GetProperty("field").GetString() == "captchaCode"
+                && error.GetProperty("code").GetString() == "CAPTCHA_INVALID"
+        );
+
+        await using var dbContext = _postgres.CreateDbContext();
+        Assert.Equal(0, await dbContext.Comments.CountAsync());
+    }
+
+    [Fact]
+    public async Task Rejects_reusing_an_already_spent_captcha_code()
+    {
+        var captcha = GenerateValidCaptcha();
+        await CreateCommentAsync(BuildInput(captcha: captcha));
+
+        var input = BuildInput(email: "bob@example.com", userName: "bob", captcha: captcha);
+        using var result = await _client.PostGraphQLAsync(Mutation, new { input });
+        var payload = result.RootElement.GetProperty("data").GetProperty("addComment");
+
+        var errors = payload.GetProperty("errors").EnumerateArray().ToArray();
+        Assert.Contains(errors, error => error.GetProperty("field").GetString() == "captchaCode");
+
+        await using var dbContext = _postgres.CreateDbContext();
+        Assert.Equal(1, await dbContext.Comments.CountAsync());
     }
 
     [Fact]

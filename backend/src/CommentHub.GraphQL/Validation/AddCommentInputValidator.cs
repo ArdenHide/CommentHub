@@ -1,3 +1,4 @@
+using CommentHub.GraphQL.Services;
 using CommentHub.GraphQL.Types;
 using FluentValidation;
 
@@ -5,7 +6,7 @@ namespace CommentHub.GraphQL.Validation;
 
 public sealed class AddCommentInputValidator : AbstractValidator<AddCommentInput>
 {
-    public AddCommentInputValidator()
+    public AddCommentInputValidator(ICaptchaChallengeService captcha)
     {
         RuleFor(input => input.UserName)
             .NotEmpty()
@@ -27,6 +28,12 @@ public sealed class AddCommentInputValidator : AbstractValidator<AddCommentInput
         RuleFor(input => input.Text)
             .NotEmpty()
             .Custom(ValidateMarkup);
+
+        RuleFor(input => input.CaptchaCode)
+            .NotEmpty()
+            .Must((input, code) => captcha.Validate(input.CaptchaId, code))
+            .WithErrorCode("CAPTCHA_INVALID")
+            .WithMessage("Captcha code is incorrect.");
     }
 
     private static bool BeAnAbsoluteUrl(string? homePage)

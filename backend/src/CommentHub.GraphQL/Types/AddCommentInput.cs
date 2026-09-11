@@ -5,5 +5,7 @@ public sealed record AddCommentInput(
     string Email,
     string? HomePage,
     string Text,
-    long? ParentId
+    long? ParentId,
+    string CaptchaId,
+    string CaptchaCode
 );

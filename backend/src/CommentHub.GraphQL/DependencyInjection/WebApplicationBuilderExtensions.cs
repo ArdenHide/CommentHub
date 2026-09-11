@@ -1,4 +1,6 @@
 using CommentHub.Database;
+using CommentHub.GraphQL.Configuration;
+using CommentHub.GraphQL.Services;
 using CommentHub.GraphQL.Types;
 using CommentHub.GraphQL.Validation;
 using Microsoft.AspNetCore.Builder;
@@ -14,6 +16,10 @@ public static class WebApplicationBuilderExtensions
     public static IRequestExecutorBuilder AddCommentHubGraphQL(this WebApplicationBuilder builder)
     {
         builder.Services.AddScoped<IValidator<AddCommentInput>, AddCommentInputValidator>();
+
+        builder.Services.AddMemoryCache();
+        builder.Services.AddOptions<CaptchaOptions>().BindConfiguration(CaptchaOptions.SectionName);
+        builder.Services.AddSingleton<ICaptchaChallengeService, CaptchaImageChallengeService>();
 
         return builder
             .AddGraphQL()

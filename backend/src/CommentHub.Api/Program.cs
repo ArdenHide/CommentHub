@@ -2,6 +2,7 @@ using CommentHub.Database;
 using CommentHub.Database.DependencyInjection;
 using CommentHub.Database.Seeding;
 using CommentHub.GraphQL.DependencyInjection;
+using CommentHub.GraphQL.Services;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -29,6 +30,10 @@ if (app.Environment.IsDevelopment() && app.Configuration.GetValue<bool>("SeedDev
 }
 
 app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
+app.MapGet(
+    "/captcha/{captchaId}",
+    (string captchaId, ICaptchaChallengeService captcha) => Results.Bytes(captcha.Generate(captchaId).ImageBytes, "image/png")
+);
 app.MapGraphQL();
 
 app.Run();
