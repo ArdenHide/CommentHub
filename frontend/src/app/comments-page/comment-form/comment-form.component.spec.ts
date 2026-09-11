@@ -48,10 +48,15 @@ describe('CommentFormComponent', () => {
     component.form.controls.email.setValue('alice@example.com');
     component.form.controls.userName.setValue('alice');
     component.form.controls.text.setValue('hello');
+    component.form.controls.captchaCode.setValue('valid-code');
   }
 
   beforeEach(async () => {
     await createComponent();
+  });
+
+  afterEach(() => {
+    fixture.destroy();
   });
 
   it('shows a "New comment" title when parentId is null', () => {
@@ -82,6 +87,18 @@ describe('CommentFormComponent', () => {
     expect(component.form.controls.email.touched).toBe(true);
     expect(component.form.controls.userName.touched).toBe(true);
     expect(component.form.controls.text.touched).toBe(true);
+    expect(component.form.controls.captchaCode.touched).toBe(true);
+  });
+
+  it('blocks submit when the captcha code is empty, even with otherwise valid fields', () => {
+    fixture.detectChanges();
+    component.form.controls.email.setValue('alice@example.com');
+    component.form.controls.userName.setValue('alice');
+    component.form.controls.text.setValue('hello');
+
+    component.submit();
+
+    expect(commentsService.addComment).not.toHaveBeenCalled();
   });
 
   it('rejects a userName containing spaces or non-latin characters', () => {
@@ -279,6 +296,7 @@ describe('CommentFormComponent', () => {
   it('submits, remembers the server-returned identity and closes the modal on success', () => {
     fixture.detectChanges();
     setValid();
+    const captchaId = component.captchaId();
 
     commentsService.addComment.mockReturnValue(of(successPayload()));
 
@@ -290,12 +308,26 @@ describe('CommentFormComponent', () => {
       homePage: null,
       text: 'hello',
       parentId: null,
+      captchaId,
+      captchaCode: 'valid-code',
     });
     expect(identityStore.remember).toHaveBeenCalledWith('alice@example.com', 'alice', null);
     expect(modalRef.close).toHaveBeenCalledWith(
       expect.objectContaining({ id: 1, authorName: 'alice', repliesKnown: true }),
     );
     expect(component.submitting()).toBe(false);
+  });
+
+  it('refreshes the captcha (new id, cleared code) after every submit attempt', () => {
+    fixture.detectChanges();
+    setValid();
+    const captchaIdBeforeSubmit = component.captchaId();
+
+    commentsService.addComment.mockReturnValue(of(successPayload()));
+    component.submit();
+
+    expect(component.captchaId()).not.toBe(captchaIdBeforeSubmit);
+    expect(component.form.controls.captchaCode.value).toBe('');
   });
 
   it('shows server field errors under the matching control without closing the modal', () => {

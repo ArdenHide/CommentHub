@@ -29,6 +29,8 @@ export interface AddCommentInput {
   homePage: string | null;
   text: string;
   parentId: number | null;
+  captchaId: string;
+  captchaCode: string;
 }
 
 export interface UserErrorDto {

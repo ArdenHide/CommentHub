@@ -1,15 +1,16 @@
-import { Component, ElementRef, inject, signal, viewChild } from '@angular/core';
+import { Component, ElementRef, computed, inject, signal, viewChild } from '@angular/core';
 import { FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { debounceTime, distinctUntilChanged, map } from 'rxjs';
 import { MdbModalRef } from 'mdb-angular-ui-kit/modal';
 import { MdbRippleModule } from 'mdb-angular-ui-kit/ripple';
+import { environment } from '../../../environments/environment';
 import { CommentsService } from '../comments.service';
 import { CommentIdentity, CommentIdentityStore } from '../comment-identity.store';
 import { mapNewComment } from '../comment-node.mapper';
 import { AddCommentInput, UserErrorDto } from '../graphql/add-comment.mutation';
 
-type FieldName = 'email' | 'userName' | 'homePage' | 'text';
+type FieldName = 'email' | 'userName' | 'homePage' | 'text' | 'captchaCode';
 
 function escapeAttr(value: string): string {
   return value.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
@@ -50,6 +51,8 @@ export class CommentFormComponent {
   readonly linkPromptOpen = signal(false);
   readonly linkHref = signal('');
   readonly linkTitle = signal('');
+  readonly captchaId = signal(crypto.randomUUID());
+  readonly captchaImageUrl = computed(() => `${environment.apiBaseUrl}/captcha/${this.captchaId()}`);
 
   readonly form = new FormGroup({
     email: new FormControl('', {
@@ -69,6 +72,7 @@ export class CommentFormComponent {
       validators: [Validators.pattern(/^https?:\/\/\S+$/i), Validators.maxLength(2048)],
     }),
     text: new FormControl('', { nonNullable: true, validators: [Validators.required] }),
+    captchaCode: new FormControl('', { nonNullable: true, validators: [Validators.required] }),
   });
 
   constructor() {
@@ -163,6 +167,11 @@ export class CommentFormComponent {
     this.modalRef.close();
   }
 
+  refreshCaptcha(): void {
+    this.captchaId.set(crypto.randomUUID());
+    this.form.controls.captchaCode.setValue('');
+  }
+
   submit(): void {
     if (this.form.invalid) {
       this.form.markAllAsTouched();
@@ -179,11 +188,14 @@ export class CommentFormComponent {
       homePage: raw.homePage ? raw.homePage : null,
       text: escapeCodeBlocks(raw.text),
       parentId: this.parentId,
+      captchaId: this.captchaId(),
+      captchaCode: raw.captchaCode,
     };
 
     this.commentsService.addComment(input).subscribe({
       next: (payload) => {
         this.submitting.set(false);
+        this.refreshCaptcha();
 
         if (payload.errors.length > 0) {
           this.applyServerErrors(payload.errors);
@@ -203,6 +215,7 @@ export class CommentFormComponent {
       },
       error: () => {
         this.submitting.set(false);
+        this.refreshCaptcha();
         this.formError.set('Failed to submit your comment. Please try again.');
       },
     });
@@ -236,7 +249,8 @@ export class CommentFormComponent {
         err.field === 'userName' ||
         err.field === 'email' ||
         err.field === 'homePage' ||
-        err.field === 'text'
+        err.field === 'text' ||
+        err.field === 'captchaCode'
       ) {
         this.form.controls[err.field].setErrors({ server: err.message });
       } else {
