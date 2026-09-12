@@ -14,6 +14,7 @@ function makeNode(id: number, overrides: Partial<CommentNode> = {}): CommentNode
     avatarSeed: `seed-${id}`,
     textHtml: `<p>Reply ${id}</p>`,
     createdAt: '2026-09-08T10:15:00Z',
+    attachment: null,
     replies: [],
     repliesTotalCount: 0,
     repliesKnown: true,
@@ -29,6 +30,7 @@ function makeRepliesPage(count: number, totalCount: number): RepliesPageDto {
       textHtml: `<p>Full reply ${i + 1}</p>`,
       createdAt: '2026-09-08T10:15:00Z',
       user: { userName: `User ${i + 1}`, homePage: null, avatarSeed: `seed-${i + 1}` },
+      attachment: null,
       replies: { totalCount: 0, items: [] },
     })),
   };

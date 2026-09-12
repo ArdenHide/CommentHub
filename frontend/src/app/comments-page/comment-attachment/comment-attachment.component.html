@@ -1,0 +1,32 @@
+@if (attachment(); as attachment) {
+  <div class="comment-attachment mt-2">
+    @if (attachment.kind === 'IMAGE') {
+      <button
+        type="button"
+        class="attachment-thumb-btn"
+        mdbRipple
+        (click)="open()"
+        [attr.aria-label]="'View image ' + attachment.originalName"
+      >
+        <img
+          class="attachment-thumb"
+          [src]="url()"
+          [attr.width]="attachment.width"
+          [attr.height]="attachment.height"
+          [alt]="attachment.originalName"
+        />
+      </button>
+    } @else {
+      <button
+        type="button"
+        class="btn btn-outline-secondary btn-sm attachment-file-btn"
+        mdbRipple
+        (click)="open()"
+      >
+        <i class="fa fa-file-lines me-1"></i>
+        {{ attachment.originalName }}
+        <span class="text-muted ms-1">({{ sizeLabel() }})</span>
+      </button>
+    }
+  </div>
+}

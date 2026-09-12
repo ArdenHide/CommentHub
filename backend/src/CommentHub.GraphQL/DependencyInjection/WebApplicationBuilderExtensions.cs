@@ -21,6 +21,11 @@ public static class WebApplicationBuilderExtensions
         builder.Services.AddOptions<CaptchaOptions>().BindConfiguration(CaptchaOptions.SectionName);
         builder.Services.AddSingleton<ICaptchaChallengeService, CaptchaImageChallengeService>();
 
+        builder.Services.AddOptions<AttachmentOptions>().BindConfiguration(AttachmentOptions.SectionName);
+        builder.Services.AddSingleton<IAttachmentStorageService, AttachmentStorageService>();
+        builder.Services.AddSingleton<IPendingAttachmentService, PendingAttachmentService>();
+        builder.Services.AddSingleton<IAttachmentProcessingService, AttachmentProcessingService>();
+
         return builder
             .AddGraphQL()
             .RegisterDbContextFactory<CommentHubDbContext>()

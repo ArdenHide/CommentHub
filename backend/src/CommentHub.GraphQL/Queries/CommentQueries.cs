@@ -18,6 +18,7 @@ public static partial class CommentQueries
         var query = dbContext.Comments
             .Where(comment => comment.ParentId == null)
             .Include(comment => comment.User)
+            .Include(comment => comment.Attachments)
             .OrderByDescending(comment => comment.CreatedAt)
             .ThenByDescending(comment => comment.Id);
 
@@ -34,5 +35,6 @@ public static partial class CommentQueries
     )
         => await dbContext.Comments
             .Include(comment => comment.User)
+            .Include(comment => comment.Attachments)
             .FirstOrDefaultAsync(comment => comment.Id == id, cancellationToken);
 }

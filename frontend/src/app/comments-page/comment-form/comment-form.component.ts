@@ -1,4 +1,4 @@
-import { Component, ElementRef, computed, inject, signal, viewChild } from '@angular/core';
+import { Component, ElementRef, OnDestroy, computed, inject, signal, viewChild } from '@angular/core';
 import { FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { debounceTime, distinctUntilChanged, map } from 'rxjs';
@@ -9,8 +9,15 @@ import { CommentsService } from '../comments.service';
 import { CommentIdentity, CommentIdentityStore } from '../comment-identity.store';
 import { mapNewComment } from '../comment-node.mapper';
 import { AddCommentInput, UserErrorDto } from '../graphql/add-comment.mutation';
+import { AttachmentUploadResultDto, AttachmentUploadService } from '../attachment-upload.service';
 
 type FieldName = 'email' | 'userName' | 'homePage' | 'text' | 'captchaCode';
+type AttachmentStatus = 'idle' | 'uploading' | 'uploaded' | 'error';
+
+const MAX_IMAGE_SOURCE_BYTES = 8 * 1024 * 1024;
+const MAX_TEXT_BYTES = 100 * 1024;
+const ATTACHMENT_EXTENSION_PATTERN = /\.(jpe?g|gif|png|txt)$/i;
+const IMAGE_EXTENSION_PATTERN = /\.(jpe?g|gif|png)$/i;
 
 function escapeAttr(value: string): string {
   return value.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
@@ -35,10 +42,11 @@ function escapeCodeBlocks(text: string): string {
   styleUrl: './comment-form.component.scss',
   templateUrl: './comment-form.component.html',
 })
-export class CommentFormComponent {
+export class CommentFormComponent implements OnDestroy {
   private readonly modalRef = inject(MdbModalRef<CommentFormComponent>);
   private readonly commentsService = inject(CommentsService);
   private readonly identityStore = inject(CommentIdentityStore);
+  private readonly attachmentUploadService = inject(AttachmentUploadService);
 
   parentId: number | null = null;
   parentAuthorName: string | null = null;
@@ -53,6 +61,12 @@ export class CommentFormComponent {
   readonly linkTitle = signal('');
   readonly captchaId = signal(crypto.randomUUID());
   readonly captchaImageUrl = computed(() => `${environment.apiBaseUrl}/captcha/${this.captchaId()}`);
+
+  readonly attachmentStatus = signal<AttachmentStatus>('idle');
+  readonly attachmentError = signal<string | null>(null);
+  readonly attachmentToken = signal<string | null>(null);
+  readonly attachmentPreview = signal<AttachmentUploadResultDto | null>(null);
+  readonly attachmentLocalUrl = signal<string | null>(null);
 
   readonly form = new FormGroup({
     email: new FormControl('', {
@@ -164,6 +178,7 @@ export class CommentFormComponent {
   }
 
   cancel(): void {
+    this.clearAttachment();
     this.modalRef.close();
   }
 
@@ -172,8 +187,56 @@ export class CommentFormComponent {
     this.form.controls.captchaCode.setValue('');
   }
 
+  onFileSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0] ?? null;
+    input.value = '';
+    if (!file) {
+      return;
+    }
+
+    this.clearAttachment();
+
+    if (!ATTACHMENT_EXTENSION_PATTERN.test(file.name)) {
+      this.attachmentStatus.set('error');
+      this.attachmentError.set('Only JPG, GIF, PNG images or TXT files are allowed.');
+      return;
+    }
+
+    const isImage = IMAGE_EXTENSION_PATTERN.test(file.name);
+    const maxBytes = isImage ? MAX_IMAGE_SOURCE_BYTES : MAX_TEXT_BYTES;
+    if (file.size > maxBytes) {
+      this.attachmentStatus.set('error');
+      this.attachmentError.set(`The file must be at most ${Math.round(maxBytes / 1024)} KB.`);
+      return;
+    }
+
+    this.attachmentLocalUrl.set(isImage ? URL.createObjectURL(file) : null);
+    this.attachmentStatus.set('uploading');
+
+    this.attachmentUploadService.upload(file).subscribe({
+      next: (result) => {
+        this.attachmentStatus.set('uploaded');
+        this.attachmentToken.set(result.token);
+        this.attachmentPreview.set(result);
+      },
+      error: () => {
+        this.attachmentStatus.set('error');
+        this.attachmentError.set('Failed to upload the file. Please try again.');
+      },
+    });
+  }
+
+  removeAttachment(): void {
+    this.clearAttachment();
+  }
+
+  ngOnDestroy(): void {
+    this.revokeLocalUrl();
+  }
+
   submit(): void {
-    if (this.form.invalid) {
+    if (this.form.invalid || this.attachmentStatus() === 'uploading') {
       this.form.markAllAsTouched();
       return;
     }
@@ -190,6 +253,7 @@ export class CommentFormComponent {
       parentId: this.parentId,
       captchaId: this.captchaId(),
       captchaCode: raw.captchaCode,
+      attachmentToken: this.attachmentToken(),
     };
 
     this.commentsService.addComment(input).subscribe({
@@ -219,6 +283,27 @@ export class CommentFormComponent {
         this.formError.set('Failed to submit your comment. Please try again.');
       },
     });
+  }
+
+  private clearAttachment(): void {
+    const token = this.attachmentToken();
+    if (token) {
+      this.attachmentUploadService.cancel(token).subscribe({ error: () => {} });
+    }
+
+    this.revokeLocalUrl();
+    this.attachmentStatus.set('idle');
+    this.attachmentError.set(null);
+    this.attachmentToken.set(null);
+    this.attachmentPreview.set(null);
+    this.attachmentLocalUrl.set(null);
+  }
+
+  private revokeLocalUrl(): void {
+    const url = this.attachmentLocalUrl();
+    if (url) {
+      URL.revokeObjectURL(url);
+    }
   }
 
   private applyIdentityLookup(email: string): void {

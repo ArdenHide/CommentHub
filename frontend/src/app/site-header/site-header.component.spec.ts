@@ -12,6 +12,7 @@ function makeNode(id: number): CommentNode {
     avatarSeed: 'seed',
     textHtml: '<p>hi</p>',
     createdAt: '2026-09-11T10:00:00Z',
+    attachment: null,
     replies: [],
     repliesTotalCount: 0,
     repliesKnown: true,

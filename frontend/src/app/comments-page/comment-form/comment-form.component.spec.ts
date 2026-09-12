@@ -1,9 +1,10 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { of, throwError } from 'rxjs';
+import { Subject, of, throwError } from 'rxjs';
 import { MdbModalRef } from 'mdb-angular-ui-kit/modal';
 import { CommentFormComponent } from './comment-form.component';
 import { CommentsService } from '../comments.service';
 import { CommentIdentityStore } from '../comment-identity.store';
+import { AttachmentUploadResultDto, AttachmentUploadService } from '../attachment-upload.service';
 import { AddCommentPayloadDto } from '../graphql/add-comment.mutation';
 
 function successPayload(overrides?: Partial<AddCommentPayloadDto>): AddCommentPayloadDto {
@@ -13,10 +14,31 @@ function successPayload(overrides?: Partial<AddCommentPayloadDto>): AddCommentPa
       textHtml: '<strong>hi</strong>',
       createdAt: '2026-09-11T10:00:00Z',
       user: { userName: 'alice', homePage: null, avatarSeed: 'seed' },
+      attachment: null,
     },
     errors: [],
     ...overrides,
   };
+}
+
+function uploadResult(overrides?: Partial<AttachmentUploadResultDto>): AttachmentUploadResultDto {
+  return {
+    token: 'token-1',
+    kind: 'TEXT',
+    originalName: 'notes.txt',
+    contentType: 'text/plain',
+    sizeBytes: 5,
+    width: null,
+    height: null,
+    previewUrl: '/attachments/pending/token-1',
+    ...overrides,
+  };
+}
+
+function makeFile(name: string, sizeBytes: number, content = 'hello'): File {
+  const file = new File([content], name);
+  Object.defineProperty(file, 'size', { value: sizeBytes });
+  return file;
 }
 
 describe('CommentFormComponent', () => {
@@ -25,11 +47,13 @@ describe('CommentFormComponent', () => {
   let modalRef: { close: ReturnType<typeof vi.fn> };
   let commentsService: { addComment: ReturnType<typeof vi.fn> };
   let identityStore: { lookup: ReturnType<typeof vi.fn>; remember: ReturnType<typeof vi.fn> };
+  let attachmentUploadService: { upload: ReturnType<typeof vi.fn>; cancel: ReturnType<typeof vi.fn> };
 
   async function createComponent(): Promise<void> {
     modalRef = { close: vi.fn() };
     commentsService = { addComment: vi.fn() };
     identityStore = { lookup: vi.fn(() => null), remember: vi.fn() };
+    attachmentUploadService = { upload: vi.fn(), cancel: vi.fn(() => of(undefined)) };
 
     await TestBed.configureTestingModule({
       imports: [CommentFormComponent],
@@ -37,6 +61,7 @@ describe('CommentFormComponent', () => {
         { provide: MdbModalRef, useValue: modalRef },
         { provide: CommentsService, useValue: commentsService },
         { provide: CommentIdentityStore, useValue: identityStore },
+        { provide: AttachmentUploadService, useValue: attachmentUploadService },
       ],
     }).compileComponents();
 
@@ -51,7 +76,14 @@ describe('CommentFormComponent', () => {
     component.form.controls.captchaCode.setValue('valid-code');
   }
 
+  function selectFile(file: File): void {
+    const input = { files: [file], value: '' } as unknown as HTMLInputElement;
+    component.onFileSelected({ target: input } as unknown as Event);
+  }
+
   beforeEach(async () => {
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:mock-url');
+    vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
     await createComponent();
   });
 
@@ -310,6 +342,7 @@ describe('CommentFormComponent', () => {
       parentId: null,
       captchaId,
       captchaCode: 'valid-code',
+      attachmentToken: null,
     });
     expect(identityStore.remember).toHaveBeenCalledWith('alice@example.com', 'alice', null);
     expect(modalRef.close).toHaveBeenCalledWith(
@@ -389,5 +422,135 @@ describe('CommentFormComponent', () => {
     component.cancel();
 
     expect(modalRef.close).toHaveBeenCalledWith();
+  });
+
+  it('uploads a valid text file and marks the attachment as uploaded', () => {
+    fixture.detectChanges();
+    attachmentUploadService.upload.mockReturnValue(of(uploadResult()));
+
+    selectFile(makeFile('notes.txt', 5));
+
+    expect(attachmentUploadService.upload).toHaveBeenCalled();
+    expect(component.attachmentStatus()).toBe('uploaded');
+    expect(component.attachmentToken()).toBe('token-1');
+  });
+
+  it('rejects a file with a disallowed extension without contacting the server', () => {
+    fixture.detectChanges();
+
+    selectFile(makeFile('malware.exe', 10));
+
+    expect(attachmentUploadService.upload).not.toHaveBeenCalled();
+    expect(component.attachmentStatus()).toBe('error');
+  });
+
+  it('rejects a text file over 100 KB without contacting the server', () => {
+    fixture.detectChanges();
+
+    selectFile(makeFile('big.txt', 100 * 1024 + 1));
+
+    expect(attachmentUploadService.upload).not.toHaveBeenCalled();
+    expect(component.attachmentStatus()).toBe('error');
+  });
+
+  it('shows an error when the upload request fails', () => {
+    fixture.detectChanges();
+    attachmentUploadService.upload.mockReturnValue(throwError(() => new Error('network')));
+
+    selectFile(makeFile('notes.txt', 5));
+
+    expect(component.attachmentStatus()).toBe('error');
+    expect(component.attachmentError()).toBeTruthy();
+  });
+
+  it('blocks submission while the attachment is still uploading', () => {
+    fixture.detectChanges();
+    setValid();
+    attachmentUploadService.upload.mockReturnValue(new Subject());
+
+    selectFile(makeFile('notes.txt', 5));
+    expect(component.attachmentStatus()).toBe('uploading');
+
+    component.submit();
+
+    expect(commentsService.addComment).not.toHaveBeenCalled();
+  });
+
+  it('includes the uploaded attachment token when submitting', () => {
+    fixture.detectChanges();
+    setValid();
+    attachmentUploadService.upload.mockReturnValue(of(uploadResult()));
+    selectFile(makeFile('notes.txt', 5));
+
+    commentsService.addComment.mockReturnValue(of(successPayload()));
+    component.submit();
+
+    expect(commentsService.addComment).toHaveBeenCalledWith(
+      expect.objectContaining({ attachmentToken: 'token-1' }),
+    );
+  });
+
+  it('keeps the uploaded attachment after a server-rejected submission attempt', () => {
+    fixture.detectChanges();
+    setValid();
+    attachmentUploadService.upload.mockReturnValue(of(uploadResult()));
+    selectFile(makeFile('notes.txt', 5));
+
+    commentsService.addComment.mockReturnValue(
+      of(
+        successPayload({
+          comment: null,
+          errors: [{ field: 'captchaCode', code: 'CAPTCHA_INVALID', message: 'Wrong code' }],
+        }),
+      ),
+    );
+    component.submit();
+
+    expect(component.attachmentToken()).toBe('token-1');
+    expect(component.attachmentStatus()).toBe('uploaded');
+    expect(attachmentUploadService.cancel).not.toHaveBeenCalled();
+  });
+
+  it('keeps the uploaded attachment after a network failure on submit', () => {
+    fixture.detectChanges();
+    setValid();
+    attachmentUploadService.upload.mockReturnValue(of(uploadResult()));
+    selectFile(makeFile('notes.txt', 5));
+
+    commentsService.addComment.mockReturnValue(throwError(() => new Error('network')));
+    component.submit();
+
+    expect(component.attachmentToken()).toBe('token-1');
+    expect(component.attachmentStatus()).toBe('uploaded');
+  });
+
+  it('removeAttachment cancels the uploaded pending token and resets the state', () => {
+    fixture.detectChanges();
+    attachmentUploadService.upload.mockReturnValue(of(uploadResult()));
+    selectFile(makeFile('notes.txt', 5));
+
+    component.removeAttachment();
+
+    expect(attachmentUploadService.cancel).toHaveBeenCalledWith('token-1');
+    expect(component.attachmentToken()).toBeNull();
+    expect(component.attachmentStatus()).toBe('idle');
+  });
+
+  it('cancels an uploaded attachment when the form itself is cancelled', () => {
+    fixture.detectChanges();
+    attachmentUploadService.upload.mockReturnValue(of(uploadResult()));
+    selectFile(makeFile('notes.txt', 5));
+
+    component.cancel();
+
+    expect(attachmentUploadService.cancel).toHaveBeenCalledWith('token-1');
+  });
+
+  it('does not call the upload service to cancel when nothing was ever attached', () => {
+    fixture.detectChanges();
+
+    component.cancel();
+
+    expect(attachmentUploadService.cancel).not.toHaveBeenCalled();
   });
 });

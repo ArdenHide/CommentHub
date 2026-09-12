@@ -1,3 +1,5 @@
+using System.Net.Http.Json;
+using System.Text.Json;
 using CommentHub.Database.Entities;
 using CommentHub.GraphQL.Services;
 using Microsoft.EntityFrameworkCore;
@@ -10,6 +12,7 @@ namespace CommentHub.GraphQL.Tests;
 public sealed class CommentMutationsTests(PostgresFixture postgres) : IAsyncLifetime
 {
     private readonly PostgresFixture _postgres = postgres;
+    private string _attachmentsRootPath = null!;
     private CommentHubApiFactory _factory = null!;
     private HttpClient _client = null!;
     private ICaptchaChallengeService _captcha = null!;
@@ -20,7 +23,8 @@ public sealed class CommentMutationsTests(PostgresFixture postgres) : IAsyncLife
         await dbContext.Comments.ExecuteDeleteAsync();
         await dbContext.Users.ExecuteDeleteAsync();
 
-        _factory = new CommentHubApiFactory(_postgres.ConnectionString);
+        _attachmentsRootPath = Directory.CreateTempSubdirectory("commenthub-attachments-").FullName;
+        _factory = new CommentHubApiFactory(_postgres.ConnectionString, _attachmentsRootPath);
         _client = _factory.CreateClient();
         _captcha = _factory.Services.GetRequiredService<ICaptchaChallengeService>();
     }
@@ -29,6 +33,7 @@ public sealed class CommentMutationsTests(PostgresFixture postgres) : IAsyncLife
     {
         _client.Dispose();
         await _factory.DisposeAsync();
+        Directory.Delete(_attachmentsRootPath, recursive: true);
     }
 
     private const string Mutation = """
@@ -38,6 +43,7 @@ public sealed class CommentMutationsTests(PostgresFixture postgres) : IAsyncLife
               id
               textHtml
               user { userName homePage avatarSeed }
+              attachment { id kind originalName contentType sizeBytes width height }
             }
             errors { field code message }
           }
@@ -50,11 +56,23 @@ public sealed class CommentMutationsTests(PostgresFixture postgres) : IAsyncLife
         string? homePage = null,
         string text = "hello",
         long? parentId = null,
-        (string Id, string Code)? captcha = null
+        (string Id, string Code)? captcha = null,
+        string? attachmentToken = null
     )
     {
         var (captchaId, captchaCode) = captcha ?? GenerateValidCaptcha();
-        return new { userName, email, homePage, text, parentId, captchaId, captchaCode };
+        return new { userName, email, homePage, text, parentId, captchaId, captchaCode, attachmentToken };
+    }
+
+    private async Task<string> UploadTextAttachmentAsync()
+    {
+        using var content = new MultipartFormDataContent();
+        content.Add(new ByteArrayContent("hello world"u8.ToArray()), "file", "notes.txt");
+
+        using var response = await _client.PostAsync("/attachments", content);
+        response.EnsureSuccessStatusCode();
+        var body = await response.Content.ReadFromJsonAsync<JsonDocument>();
+        return body!.RootElement.GetProperty("token").GetString()!;
     }
 
     private (string Id, string Code) GenerateValidCaptcha()
@@ -219,6 +237,64 @@ public sealed class CommentMutationsTests(PostgresFixture postgres) : IAsyncLife
 
         await using var dbContext = _postgres.CreateDbContext();
         Assert.Equal(0, await dbContext.Comments.CountAsync());
+    }
+
+    [Fact]
+    public async Task Creates_a_comment_with_an_uploaded_attachment()
+    {
+        var token = await UploadTextAttachmentAsync();
+        var input = BuildInput(attachmentToken: token);
+
+        using var result = await _client.PostGraphQLAsync(Mutation, new { input });
+        var comment = result.RootElement.GetProperty("data").GetProperty("addComment").GetProperty("comment");
+
+        var attachment = comment.GetProperty("attachment");
+        Assert.Equal("TEXT", attachment.GetProperty("kind").GetString());
+        Assert.Equal("notes.txt", attachment.GetProperty("originalName").GetString());
+        Assert.Equal(11, attachment.GetProperty("sizeBytes").GetInt32());
+
+        await using var dbContext = _postgres.CreateDbContext();
+        var saved = await dbContext.Comments.Include(c => c.Attachments).SingleAsync();
+        Assert.Single(saved.Attachments);
+        Assert.Equal(saved.Id, saved.Attachments.Single().CommentId);
+    }
+
+    [Fact]
+    public async Task Rejects_a_missing_or_expired_attachment_token()
+    {
+        var input = BuildInput(attachmentToken: "does-not-exist");
+
+        using var result = await _client.PostGraphQLAsync(Mutation, new { input });
+        var payload = result.RootElement.GetProperty("data").GetProperty("addComment");
+
+        Assert.Equal(System.Text.Json.JsonValueKind.Null, payload.GetProperty("comment").ValueKind);
+        var errors = payload.GetProperty("errors").EnumerateArray().ToArray();
+        Assert.Contains(
+            errors,
+            error =>
+                error.GetProperty("field").GetString() == "attachmentToken"
+                && error.GetProperty("code").GetString() == "ATTACHMENT_EXPIRED"
+        );
+
+        await using var dbContext = _postgres.CreateDbContext();
+        Assert.Equal(0, await dbContext.Comments.CountAsync());
+    }
+
+    [Fact]
+    public async Task Keeps_an_uploaded_attachment_usable_after_a_failed_submission_attempt()
+    {
+        var token = await UploadTextAttachmentAsync();
+
+        var badAttempt = BuildInput(attachmentToken: token, captcha: (Guid.NewGuid().ToString(), "wrong-code"));
+        using var badResult = await _client.PostGraphQLAsync(Mutation, new { input = badAttempt });
+        var badPayload = badResult.RootElement.GetProperty("data").GetProperty("addComment");
+        Assert.Equal(System.Text.Json.JsonValueKind.Null, badPayload.GetProperty("comment").ValueKind);
+
+        var goodAttempt = BuildInput(attachmentToken: token);
+        using var goodResult = await _client.PostGraphQLAsync(Mutation, new { input = goodAttempt });
+        var comment = goodResult.RootElement.GetProperty("data").GetProperty("addComment").GetProperty("comment");
+
+        Assert.Equal("TEXT", comment.GetProperty("attachment").GetProperty("kind").GetString());
     }
 
     private async Task<long> CreateCommentAsync(object input)

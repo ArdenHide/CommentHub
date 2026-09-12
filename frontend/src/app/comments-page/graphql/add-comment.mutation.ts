@@ -1,5 +1,5 @@
 import { gql } from 'apollo-angular';
-import { UserDto } from './get-comments.query';
+import { CommentAttachmentDto, UserDto } from './get-comments.query';
 
 export const ADD_COMMENT_MUTATION = gql`
   mutation AddComment($input: AddCommentInput!) {
@@ -12,6 +12,15 @@ export const ADD_COMMENT_MUTATION = gql`
           userName
           homePage
           avatarSeed
+        }
+        attachment {
+          id
+          kind
+          originalName
+          contentType
+          sizeBytes
+          width
+          height
         }
       }
       errors {
@@ -31,6 +40,7 @@ export interface AddCommentInput {
   parentId: number | null;
   captchaId: string;
   captchaCode: string;
+  attachmentToken: string | null;
 }
 
 export interface UserErrorDto {
@@ -44,6 +54,7 @@ export interface AddedCommentDto {
   textHtml: string;
   createdAt: string;
   user: UserDto;
+  attachment: CommentAttachmentDto | null;
 }
 
 export interface AddCommentPayloadDto {

@@ -16,6 +16,7 @@ public static class CommentDataLoaders
         var replies = await dbContext.Comments
             .Where(comment => comment.ParentId.HasValue && parentIds.Contains(comment.ParentId.Value))
             .Include(comment => comment.User)
+            .Include(comment => comment.Attachments)
             .OrderBy(comment => comment.CreatedAt)
             .ThenBy(comment => comment.Id)
             .ToListAsync(cancellationToken);

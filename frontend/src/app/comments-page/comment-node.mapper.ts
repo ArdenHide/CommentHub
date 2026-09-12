@@ -1,4 +1,4 @@
-import { CommentNodeDto, RepliesPageDto } from './graphql/get-comments.query';
+import { CommentAttachmentDto, CommentNodeDto, RepliesPageDto } from './graphql/get-comments.query';
 import { AddedCommentDto } from './graphql/add-comment.mutation';
 
 export interface CommentNode {
@@ -7,6 +7,7 @@ export interface CommentNode {
   avatarSeed: string;
   textHtml: string;
   createdAt: string;
+  attachment: CommentAttachmentDto | null;
   replies: CommentNode[];
   repliesTotalCount: number;
   repliesKnown: boolean;
@@ -25,6 +26,7 @@ export function mapCommentNode(dto: CommentNodeDto): CommentNode {
     avatarSeed: dto.user.avatarSeed,
     textHtml: dto.textHtml,
     createdAt: dto.createdAt,
+    attachment: dto.attachment,
     replies: repliesKnown ? mapRepliesPage(dto.replies!) : [],
     repliesTotalCount: repliesKnown ? dto.replies!.totalCount : 0,
     repliesKnown,
@@ -38,6 +40,7 @@ export function mapNewComment(dto: AddedCommentDto): CommentNode {
     avatarSeed: dto.user.avatarSeed,
     textHtml: dto.textHtml,
     createdAt: dto.createdAt,
+    attachment: dto.attachment,
     replies: [],
     repliesTotalCount: 0,
     repliesKnown: true,

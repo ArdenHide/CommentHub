@@ -1,0 +1,23 @@
+<div class="modal-header">
+  <h5 class="modal-title text-truncate">{{ originalName }}</h5>
+  <button type="button" class="btn-close" aria-label="Close" (click)="close()"></button>
+</div>
+
+<div class="modal-body text-center">
+  @if (kind === 'IMAGE') {
+    <img class="lightbox-image" [src]="url" [alt]="originalName" />
+  } @else {
+    @if (textError()) {
+      <div class="alert alert-danger py-1 px-2 small" role="alert">{{ textError() }}</div>
+    } @else if (textContent() === null) {
+      <p class="text-muted">Loading…</p>
+    } @else {
+      <pre class="lightbox-text text-start">{{ textContent() }}</pre>
+    }
+  }
+</div>
+
+<div class="modal-footer">
+  <a class="btn btn-outline-secondary" [href]="url" download>Download</a>
+  <button type="button" class="btn btn-primary" (click)="close()">Close</button>
+</div>

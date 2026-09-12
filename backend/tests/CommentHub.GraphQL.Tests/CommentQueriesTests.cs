@@ -267,6 +267,41 @@ public sealed class CommentQueriesTests(PostgresFixture postgres) : IAsyncLifeti
     }
 
     [Fact]
+    public async Task Comment_exposes_its_attachment_when_present_and_null_otherwise()
+    {
+        await using var dbContext = _postgres.CreateDbContext();
+        dbContext.Attachments.Add(new Attachment
+        {
+            CommentId = _seeded.Root2Id,
+            Kind = AttachmentKind.Text,
+            StoragePath = $"{Guid.NewGuid():N}.txt",
+            OriginalName = "notes.txt",
+            ContentType = "text/plain",
+            SizeBytes = 11,
+        });
+        await dbContext.SaveChangesAsync();
+
+        const string query = """
+            query($withAttachment: Long!, $withoutAttachment: Long!) {
+              withAttachment: comment(id: $withAttachment) { attachment { kind originalName sizeBytes } }
+              withoutAttachment: comment(id: $withoutAttachment) { attachment { kind } }
+            }
+            """;
+
+        using var result = await _client.PostGraphQLAsync(
+            query,
+            new { withAttachment = _seeded.Root2Id, withoutAttachment = _seeded.Root1Id }
+        );
+
+        var withAttachment = result.RootElement.GetProperty("data").GetProperty("withAttachment").GetProperty("attachment");
+        Assert.Equal("TEXT", withAttachment.GetProperty("kind").GetString());
+        Assert.Equal("notes.txt", withAttachment.GetProperty("originalName").GetString());
+
+        var withoutAttachment = result.RootElement.GetProperty("data").GetProperty("withoutAttachment").GetProperty("attachment");
+        Assert.Equal(System.Text.Json.JsonValueKind.Null, withoutAttachment.ValueKind);
+    }
+
+    [Fact]
     public async Task User_type_does_not_expose_email()
     {
         using var result = await _client.PostGraphQLAsync(

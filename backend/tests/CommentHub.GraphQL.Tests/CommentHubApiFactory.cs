@@ -4,7 +4,7 @@ using Microsoft.Extensions.Configuration;
 
 namespace CommentHub.GraphQL.Tests;
 
-public sealed class CommentHubApiFactory(string connectionString) : WebApplicationFactory<Program>
+public sealed class CommentHubApiFactory(string connectionString, string? attachmentsRootPath = null) : WebApplicationFactory<Program>
 {
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
@@ -12,13 +12,18 @@ public sealed class CommentHubApiFactory(string connectionString) : WebApplicati
 
         builder.ConfigureAppConfiguration((_, config) =>
         {
-            config.AddInMemoryCollection(
-                new Dictionary<string, string?>
-                {
-                    ["ConnectionStrings:CommentHub"] = connectionString,
-                    ["SeedDevData"] = "false",
-                }
-            );
+            var settings = new Dictionary<string, string?>
+            {
+                ["ConnectionStrings:CommentHub"] = connectionString,
+                ["SeedDevData"] = "false",
+            };
+
+            if (attachmentsRootPath is not null)
+            {
+                settings["Attachments:RootPath"] = attachmentsRootPath;
+            }
+
+            config.AddInMemoryCollection(settings);
         });
     }
 }

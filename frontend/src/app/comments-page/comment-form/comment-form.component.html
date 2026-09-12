@@ -150,6 +150,45 @@
     </div>
 
     <div class="mb-3">
+      <label class="form-label d-block" for="cf-file">Attach a picture or a text file (optional)</label>
+      <input
+        id="cf-file"
+        type="file"
+        class="form-control"
+        [class.is-invalid]="attachmentStatus() === 'error'"
+        accept=".jpg,.jpeg,.gif,.png,.txt,image/jpeg,image/gif,image/png,text/plain"
+        (change)="onFileSelected($event)"
+      />
+      <div class="form-text">JPG, GIF or PNG (resized to at most 320×240) or a TXT file up to 100 KB.</div>
+      @if (attachmentStatus() === 'error') {
+        <div class="invalid-feedback d-block">{{ attachmentError() }}</div>
+      }
+
+      @if (attachmentStatus() === 'uploading') {
+        <p class="text-muted small mb-0 mt-1">Uploading…</p>
+      }
+
+      @if (attachmentStatus() === 'uploaded' && attachmentPreview(); as preview) {
+        <div class="d-flex align-items-center gap-2 mt-2 attachment-preview">
+          @if (preview.kind === 'IMAGE') {
+            <img class="attachment-preview-thumb" [src]="attachmentLocalUrl()" [alt]="preview.originalName" />
+          } @else {
+            <i class="fa fa-file-lines"></i>
+          }
+          <span class="small text-truncate">{{ preview.originalName }}</span>
+          <button
+            type="button"
+            class="btn btn-link btn-sm text-danger p-0 ms-auto"
+            mdbRipple
+            (click)="removeAttachment()"
+          >
+            Remove
+          </button>
+        </div>
+      }
+    </div>
+
+    <div class="mb-3">
       <label class="form-label d-block" for="cf-captcha-code">Enter the code shown in the image</label>
       <div class="d-flex align-items-center gap-2 mb-2">
         <img [src]="captchaImageUrl()" alt="CAPTCHA" width="160" height="60" />
@@ -180,7 +219,12 @@
     <button type="button" class="btn btn-outline-secondary" mdbRipple (click)="cancel()">
       Cancel
     </button>
-    <button type="submit" class="btn btn-primary" mdbRipple [disabled]="submitting()">
+    <button
+      type="submit"
+      class="btn btn-primary"
+      mdbRipple
+      [disabled]="submitting() || attachmentStatus() === 'uploading'"
+    >
       {{ submitting() ? 'Posting…' : 'Post comment' }}
     </button>
   </div>

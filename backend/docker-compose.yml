@@ -29,5 +29,24 @@ services:
       postgres:
         condition: service_healthy
 
+  api:
+    build:
+      context: .
+      dockerfile: src/CommentHub.Api/Dockerfile
+    container_name: commenthub-api
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__CommentHub: "Host=postgres;Port=5432;Database=commenthub;Username=commenthub;Password=commenthub"
+      SeedDevData: "false"
+      Attachments__RootPath: /data/attachments
+    ports:
+      - "5203:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - attachments-data:/data/attachments
+
 volumes:
   postgres-data:
+  attachments-data:
