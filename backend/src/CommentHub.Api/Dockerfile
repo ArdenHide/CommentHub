@@ -12,12 +12,6 @@ RUN dotnet publish src/CommentHub.Api/CommentHub.Api.csproj -c Release -o /app -
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 WORKDIR /app
 
-# SkiaSharp (used to render the CAPTCHA image) dynamically loads libfontconfig,
-# which the base runtime image does not include.
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends libfontconfig1 \
-    && rm -rf /var/lib/apt/lists/*
-
 COPY --from=build /app .
 
 ENV ASPNETCORE_URLS=http://+:8080

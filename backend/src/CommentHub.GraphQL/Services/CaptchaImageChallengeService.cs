@@ -1,7 +1,11 @@
 using CommentHub.GraphQL.Configuration;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
-using SkiaSharp;
+using SixLabors.Fonts;
+using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.Drawing.Processing;
+using SixLabors.ImageSharp.PixelFormats;
+using SixLabors.ImageSharp.Processing;
 
 namespace CommentHub.GraphQL.Services;
 
@@ -10,6 +14,10 @@ public sealed class CaptchaImageChallengeService(IMemoryCache cache, IOptions<Ca
 {
     private const string Alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
     private const int LinesCount = 20;
+    private const string FontResourceName = "CommentHub.GraphQL.Resources.Fonts.LiberationSans-Bold.ttf";
+
+    private static readonly FontFamily FontFamily = LoadFontFamily();
+    private static readonly Color NoiseColor = Color.FromRgb(190, 190, 190);
 
     private readonly CaptchaOptions _options = options.Value;
 
@@ -45,39 +53,53 @@ public sealed class CaptchaImageChallengeService(IMemoryCache cache, IOptions<Ca
 
     private byte[] RenderImage(string code)
     {
-        using var bitmap = new SKBitmap(_options.ImageWidth, _options.ImageHeight);
-        using var canvas = new SKCanvas(bitmap);
-        canvas.Clear(SKColors.White);
-
-        using var noisePaint = new SKPaint { Color = new SKColor(190, 190, 190), StrokeWidth = 2 };
-        for (var i = 0; i < LinesCount; i++)
-        {
-            canvas.DrawLine(
-                Random.Shared.Next(_options.ImageWidth),
-                Random.Shared.Next(_options.ImageHeight),
-                Random.Shared.Next(_options.ImageWidth),
-                Random.Shared.Next(_options.ImageHeight),
-                noisePaint
-            );
-        }
-
-        using var typeface = SKTypeface.FromFamilyName("Arial", SKFontStyle.Bold) ?? SKTypeface.Default;
-        using var font = new SKFont(typeface, _options.ImageHeight * 0.5f);
-        using var textPaint = new SKPaint { Color = SKColors.Black, IsAntialias = true };
-
+        var font = FontFamily.CreateFont(_options.ImageHeight * 0.5f, FontStyle.Bold);
         var slotWidth = _options.ImageWidth / (float)code.Length;
-        for (var i = 0; i < code.Length; i++)
-        {
-            canvas.Save();
-            canvas.Translate(slotWidth * i + slotWidth / 2, _options.ImageHeight / 2f + font.Size / 3);
-            canvas.RotateDegrees(Random.Shared.Next(-25, 26));
-            canvas.DrawText(code[i].ToString(), 0, 0, SKTextAlign.Center, font, textPaint);
-            canvas.Restore();
-        }
 
-        using var image = SKImage.FromBitmap(bitmap);
-        using var data = image.Encode(SKEncodedImageFormat.Png, 100);
-        return data.ToArray();
+        using var image = new Image<Rgba32>(_options.ImageWidth, _options.ImageHeight);
+        image.Mutate(ctx =>
+        {
+            ctx.Fill(Color.White);
+
+            for (var i = 0; i < LinesCount; i++)
+            {
+                ctx.DrawLine(
+                    NoiseColor,
+                    2,
+                    new PointF(Random.Shared.Next(_options.ImageWidth), Random.Shared.Next(_options.ImageHeight)),
+                    new PointF(Random.Shared.Next(_options.ImageWidth), Random.Shared.Next(_options.ImageHeight))
+                );
+            }
+
+            for (var i = 0; i < code.Length; i++)
+            {
+                var pivot = new PointF(slotWidth * i + slotWidth / 2, _options.ImageHeight / 2f);
+                var drawingOptions = new DrawingOptions
+                {
+                    Transform = Matrix3x2Extensions.CreateRotationDegrees(Random.Shared.Next(-25, 26), pivot),
+                };
+                var textOptions = new RichTextOptions(font)
+                {
+                    Origin = pivot,
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    VerticalAlignment = VerticalAlignment.Center,
+                };
+
+                ctx.DrawText(drawingOptions, textOptions, code[i].ToString(), Brushes.Solid(Color.Black), null);
+            }
+        });
+
+        using var stream = new MemoryStream();
+        image.SaveAsPng(stream);
+        return stream.ToArray();
+    }
+
+    private static FontFamily LoadFontFamily()
+    {
+        using var stream = typeof(CaptchaImageChallengeService).Assembly.GetManifestResourceStream(FontResourceName)
+            ?? throw new InvalidOperationException($"Embedded CAPTCHA font resource '{FontResourceName}' not found.");
+
+        return new FontCollection().Add(stream);
     }
 
     private static string CacheKey(string captchaId) => $"captcha:{captchaId}";
