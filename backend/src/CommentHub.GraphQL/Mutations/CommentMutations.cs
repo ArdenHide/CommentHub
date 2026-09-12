@@ -1,5 +1,6 @@
 using CommentHub.Database;
 using CommentHub.Database.Entities;
+using CommentHub.GraphQL.Services;
 using CommentHub.GraphQL.Types;
 using CommentHub.GraphQL.Validation;
 using FluentValidation;
@@ -14,6 +15,7 @@ public static partial class CommentMutations
         AddCommentInput input,
         CommentHubDbContext dbContext,
         IValidator<AddCommentInput> validator,
+        IPendingAttachmentService pendingAttachments,
         CancellationToken cancellationToken
     )
     {
@@ -56,6 +58,33 @@ public static partial class CommentMutations
             dbContext.Users.Add(user);
         }
 
+        Attachment? attachment = null;
+        if (!string.IsNullOrEmpty(input.AttachmentToken))
+        {
+            var pending = pendingAttachments.Consume(input.AttachmentToken);
+            if (pending is null)
+            {
+                var error = new UserError(
+                    ToCamelCase(nameof(AddCommentInput.AttachmentToken)),
+                    "ATTACHMENT_EXPIRED",
+                    "The attached file has expired. Please attach it again."
+                );
+                return new AddCommentPayload(null, [error]);
+            }
+
+            attachment = new Attachment
+            {
+                Kind = pending.Kind,
+                StoragePath = pending.StoragePath,
+                OriginalName = pending.OriginalName,
+                ContentType = pending.ContentType,
+                SizeBytes = pending.SizeBytes,
+                Width = pending.Width,
+                Height = pending.Height,
+                CreatedAt = DateTimeOffset.UtcNow,
+            };
+        }
+
         CommentTextValidator.TryValidateAndSanitize(input.Text, out var sanitizedHtml, out _);
 
         var comment = new Comment
@@ -68,6 +97,12 @@ public static partial class CommentMutations
             CreatedAt = DateTimeOffset.UtcNow,
         };
         dbContext.Comments.Add(comment);
+
+        if (attachment is not null)
+        {
+            attachment.Comment = comment;
+            dbContext.Attachments.Add(attachment);
+        }
 
         await dbContext.SaveChangesAsync(cancellationToken);
 

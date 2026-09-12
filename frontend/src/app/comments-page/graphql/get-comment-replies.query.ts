@@ -15,6 +15,15 @@ export const GET_COMMENT_REPLIES_QUERY = gql`
             homePage
             avatarSeed
           }
+          attachment {
+            id
+            kind
+            originalName
+            contentType
+            sizeBytes
+            width
+            height
+          }
           replies(take: 1, descending: true) {
             totalCount
             items {
@@ -25,6 +34,15 @@ export const GET_COMMENT_REPLIES_QUERY = gql`
                 userName
                 homePage
                 avatarSeed
+              }
+              attachment {
+                id
+                kind
+                originalName
+                contentType
+                sizeBytes
+                width
+                height
               }
             }
           }

@@ -14,6 +14,10 @@ public static partial class CommentType
         descriptor.Field(comment => comment.TextHtml);
         descriptor.Field(comment => comment.CreatedAt);
         descriptor.Field(comment => comment.User).Type<NonNullType<UserType>>();
+
+        descriptor
+            .Field("attachment")
+            .Resolve(context => context.Parent<Comment>().Attachments.FirstOrDefault());
     }
 
     public static async Task<CommentPage> GetRepliesAsync(

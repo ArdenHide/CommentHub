@@ -19,6 +19,15 @@ export const GET_COMMENTS_QUERY = gql`
       homePage
       avatarSeed
     }
+    attachment {
+      id
+      kind
+      originalName
+      contentType
+      sizeBytes
+      width
+      height
+    }
     replies(take: 1, descending: true) {
       totalCount
       items {
@@ -30,6 +39,15 @@ export const GET_COMMENTS_QUERY = gql`
           homePage
           avatarSeed
         }
+        attachment {
+          id
+          kind
+          originalName
+          contentType
+          sizeBytes
+          width
+          height
+        }
         replies(take: 1, descending: true) {
           totalCount
           items {
@@ -40,6 +58,15 @@ export const GET_COMMENTS_QUERY = gql`
               userName
               homePage
               avatarSeed
+            }
+            attachment {
+              id
+              kind
+              originalName
+              contentType
+              sizeBytes
+              width
+              height
             }
           }
         }
@@ -54,6 +81,16 @@ export interface UserDto {
   avatarSeed: string;
 }
 
+export interface CommentAttachmentDto {
+  id: number;
+  kind: 'IMAGE' | 'TEXT';
+  originalName: string;
+  contentType: string;
+  sizeBytes: number;
+  width: number | null;
+  height: number | null;
+}
+
 export interface RepliesPageDto {
   totalCount: number;
   items: CommentNodeDto[];
@@ -64,6 +101,7 @@ export interface CommentNodeDto {
   textHtml: string;
   createdAt: string;
   user: UserDto;
+  attachment: CommentAttachmentDto | null;
   replies?: RepliesPageDto;
 }
 

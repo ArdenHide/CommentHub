@@ -7,5 +7,6 @@ public sealed record AddCommentInput(
     string Text,
     long? ParentId,
     string CaptchaId,
-    string CaptchaCode
+    string CaptchaCode,
+    string? AttachmentToken
 );

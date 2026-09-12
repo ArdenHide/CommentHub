@@ -16,6 +16,7 @@
                 <small class="text-muted">{{ reply.createdAt | date: 'medium' }}</small>
               </div>
               <p class="comment-text mb-1 mt-1" [innerHTML]="reply.textHtml"></p>
+              <app-comment-attachment [attachment]="reply.attachment" />
               <button
                 type="button"
                 class="btn btn-link btn-sm p-0 reply-btn"
@@ -49,6 +50,7 @@
               <small class="text-muted ms-auto">{{ reply.createdAt | date: 'medium' }}</small>
             </div>
             <p class="comment-text mb-1 mt-1" [innerHTML]="reply.textHtml"></p>
+            <app-comment-attachment [attachment]="reply.attachment" />
             <button
               type="button"
               class="btn btn-link btn-sm p-0 reply-btn"

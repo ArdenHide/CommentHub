@@ -26,6 +26,7 @@
                 <small class="text-muted">{{ comment.createdAt | date: 'medium' }}</small>
               </div>
               <p class="comment-text mb-2 mt-1" [innerHTML]="comment.textHtml"></p>
+              <app-comment-attachment [attachment]="comment.attachment" />
               <button
                 type="button"
                 class="btn btn-link btn-sm p-0"

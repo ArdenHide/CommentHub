@@ -12,6 +12,7 @@
     <PackageReference Include="HotChocolate.Types.Analyzers" Version="16.6.4" PrivateAssets="all" />
     <PackageReference Include="HotChocolate.Data.EntityFramework" Version="16.6.4" />
     <PackageReference Include="HtmlSanitizer" Version="9.2.1039" />
+    <PackageReference Include="SixLabors.ImageSharp" Version="3.1.12" />
     <PackageReference Include="SkiaSharp" Version="4.152.0" />
     <PackageReference Include="SkiaSharp.NativeAssets.Linux" Version="4.152.0" />
   </ItemGroup>

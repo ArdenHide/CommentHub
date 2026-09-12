@@ -7,6 +7,7 @@ function makeDto(id: number, replies: CommentNodeDto[] = [], repliesTotalCount =
     textHtml: `<p>Comment ${id}</p>`,
     createdAt: '2026-09-08T10:15:00Z',
     user: { userName: `User ${id}`, homePage: null, avatarSeed: `seed-${id}` },
+    attachment: null,
     replies: { totalCount: repliesTotalCount, items: replies },
   };
 }
@@ -40,6 +41,7 @@ describe('mapCommentNode', () => {
       textHtml: '<p>Comment 4</p>',
       createdAt: '2026-09-08T10:15:00Z',
       user: { userName: 'User 4', homePage: null, avatarSeed: 'seed-4' },
+      attachment: null,
     };
     const dto = makeDto(1, [beyondQueriedDepth], 1);
 

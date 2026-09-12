@@ -19,6 +19,7 @@ function makePage(count: number, totalCount: number, offset = 0): CommentsPageDt
         homePage: null,
         avatarSeed: `seed-${offset + i + 1}`,
       },
+      attachment: null,
       replies: { totalCount: 0, items: [] },
     })),
   };
@@ -129,6 +130,7 @@ describe('CommentsPage', () => {
       avatarSeed: 'seed-100',
       textHtml: '<p>hi</p>',
       createdAt: '2026-09-11T10:00:00Z',
+      attachment: null,
       replies: [],
       repliesTotalCount: 0,
       repliesKnown: true,
@@ -147,6 +149,7 @@ describe('CommentsPage', () => {
       avatarSeed: 'seed-200',
       textHtml: '<p>reply text</p>',
       createdAt: '2026-09-11T10:00:00Z',
+      attachment: null,
       replies: [],
       repliesTotalCount: 0,
       repliesKnown: true,

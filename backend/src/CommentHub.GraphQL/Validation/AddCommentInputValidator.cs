@@ -6,7 +6,7 @@ namespace CommentHub.GraphQL.Validation;
 
 public sealed class AddCommentInputValidator : AbstractValidator<AddCommentInput>
 {
-    public AddCommentInputValidator(ICaptchaChallengeService captcha)
+    public AddCommentInputValidator(ICaptchaChallengeService captcha, IPendingAttachmentService pendingAttachments)
     {
         RuleFor(input => input.UserName)
             .NotEmpty()
@@ -34,6 +34,12 @@ public sealed class AddCommentInputValidator : AbstractValidator<AddCommentInput
             .Must((input, code) => captcha.Validate(input.CaptchaId, code))
             .WithErrorCode("CAPTCHA_INVALID")
             .WithMessage("Captcha code is incorrect.");
+
+        RuleFor(input => input.AttachmentToken)
+            .Must(token => pendingAttachments.Get(token!) is not null)
+            .WithErrorCode("ATTACHMENT_EXPIRED")
+            .WithMessage("The attached file has expired or was not found. Please attach it again.")
+            .When(input => !string.IsNullOrEmpty(input.AttachmentToken));
     }
 
     private static bool BeAnAbsoluteUrl(string? homePage)
