@@ -12,7 +12,22 @@
             />
             <div class="flex-grow-1">
               <div class="d-flex justify-content-between align-items-baseline">
-                <h6 class="mb-0">{{ reply.authorName }}</h6>
+                <h6 class="mb-0">
+                  @if (reply.authorHomePage; as homePage) {
+                    <a
+                      [href]="homePage"
+                      [title]="homePage"
+                      target="_blank"
+                      rel="nofollow ugc noopener noreferrer"
+                      class="text-reset text-decoration-none"
+                    >
+                      {{ reply.authorName }}
+                      <i class="fa fa-globe ms-1 small text-muted"></i>
+                    </a>
+                  } @else {
+                    {{ reply.authorName }}
+                  }
+                </h6>
                 <small class="text-muted">{{ reply.createdAt | date: 'medium' }}</small>
               </div>
               <p class="comment-text mb-1 mt-1" [innerHTML]="reply.textHtml"></p>
@@ -46,7 +61,22 @@
                 [authorName]="reply.authorName"
                 [size]="32"
               />
-              <h6 class="mb-0">{{ reply.authorName }}</h6>
+              <h6 class="mb-0">
+                @if (reply.authorHomePage; as homePage) {
+                  <a
+                    [href]="homePage"
+                    [title]="homePage"
+                    target="_blank"
+                    rel="nofollow ugc noopener noreferrer"
+                    class="text-reset text-decoration-none"
+                  >
+                    {{ reply.authorName }}
+                    <i class="fa fa-globe ms-1 small text-muted"></i>
+                  </a>
+                } @else {
+                  {{ reply.authorName }}
+                }
+              </h6>
               <small class="text-muted ms-auto">{{ reply.createdAt | date: 'medium' }}</small>
             </div>
             <p class="comment-text mb-1 mt-1" [innerHTML]="reply.textHtml"></p>

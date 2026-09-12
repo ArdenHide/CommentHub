@@ -4,6 +4,7 @@ import { AddedCommentDto } from './graphql/add-comment.mutation';
 export interface CommentNode {
   id: number;
   authorName: string;
+  authorHomePage: string | null;
   avatarSeed: string;
   textHtml: string;
   createdAt: string;
@@ -23,6 +24,7 @@ export function mapCommentNode(dto: CommentNodeDto): CommentNode {
   return {
     id: dto.id,
     authorName: dto.user.userName,
+    authorHomePage: dto.user.homePage,
     avatarSeed: dto.user.avatarSeed,
     textHtml: dto.textHtml,
     createdAt: dto.createdAt,
@@ -37,6 +39,7 @@ export function mapNewComment(dto: AddedCommentDto): CommentNode {
   return {
     id: dto.id,
     authorName: dto.user.userName,
+    authorHomePage: dto.user.homePage,
     avatarSeed: dto.user.avatarSeed,
     textHtml: dto.textHtml,
     createdAt: dto.createdAt,
