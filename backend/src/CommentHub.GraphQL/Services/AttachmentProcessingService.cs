@@ -1,9 +1,15 @@
+using System.Diagnostics;
 using System.Text;
 using CommentHub.Database.Entities;
 using CommentHub.GraphQL.Configuration;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Options;
-using SkiaSharp;
+using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.Formats;
+using SixLabors.ImageSharp.Formats.Gif;
+using SixLabors.ImageSharp.Formats.Jpeg;
+using SixLabors.ImageSharp.Formats.Png;
+using SixLabors.ImageSharp.Processing;
 
 namespace CommentHub.GraphQL.Services;
 
@@ -58,71 +64,61 @@ public sealed class AttachmentProcessingService(
 
     private async Task<AttachmentProcessingResult> ProcessImageAsync(byte[] bytes, string originalName, CancellationToken cancellationToken)
     {
-        using var codec = SKCodec.Create(new MemoryStream(bytes));
-        if (codec is null)
+        Image image;
+        try
+        {
+            image = Image.Load(bytes);
+        }
+        catch (ImageFormatException)
         {
             return AttachmentProcessingResult.Fail("INVALID_IMAGE", "The file is not a valid image.");
         }
 
-        (string ContentType, string Extension)? format = codec.EncodedFormat switch
+        using (image)
         {
-            SKEncodedImageFormat.Jpeg => ("image/jpeg", ".jpg"),
-            SKEncodedImageFormat.Png => ("image/png", ".png"),
-            SKEncodedImageFormat.Gif => ("image/gif", ".gif"),
-            _ => null,
-        };
-
-        if (format is null)
-        {
-            return AttachmentProcessingResult.Fail("INVALID_IMAGE", "Only JPG, GIF and PNG images are allowed.");
-        }
-
-        var (contentType, extension) = format.Value;
-        var width = codec.Info.Width;
-        var height = codec.Info.Height;
-        var withinBounds = width <= _options.MaxImageWidth && height <= _options.MaxImageHeight;
-
-        if (codec.EncodedFormat == SKEncodedImageFormat.Gif)
-        {
-            if (!withinBounds)
+            var decodedFormat = image.Metadata.DecodedImageFormat;
+            (string ContentType, string Extension)? format = decodedFormat switch
             {
-                return AttachmentProcessingResult.Fail(
-                    "IMAGE_TOO_LARGE_GIF",
-                    $"GIF images larger than {_options.MaxImageWidth}x{_options.MaxImageHeight} are not supported. Please resize it before uploading."
-                );
+                JpegFormat => ("image/jpeg", ".jpg"),
+                PngFormat => ("image/png", ".png"),
+                GifFormat => ("image/gif", ".gif"),
+                _ => null,
+            };
+
+            if (format is null)
+            {
+                return AttachmentProcessingResult.Fail("INVALID_IMAGE", "Only JPG, GIF and PNG images are allowed.");
             }
 
-            // Kept byte-for-byte: SkiaSharp can decode GIF but not re-encode it, so an in-bounds
-            // GIF is stored as uploaded to preserve its animation.
-            return await SaveAsync(bytes, AttachmentKind.Image, contentType, extension, width, height, originalName, cancellationToken);
+            var (contentType, extension) = format.Value;
+            var width = image.Width;
+            var height = image.Height;
+            var withinBounds = width <= _options.MaxImageWidth && height <= _options.MaxImageHeight;
+
+            if (withinBounds)
+            {
+                return await SaveAsync(bytes, AttachmentKind.Image, contentType, extension, width, height, originalName, cancellationToken);
+            }
+
+            var scale = Math.Min((double)_options.MaxImageWidth / width, (double)_options.MaxImageHeight / height);
+            var newWidth = Math.Max(1, (int)Math.Round(width * scale));
+            var newHeight = Math.Max(1, (int)Math.Round(height * scale));
+
+            image.Mutate(x => x.Resize(newWidth, newHeight));
+
+            IImageEncoder encoder = decodedFormat switch
+            {
+                JpegFormat => new JpegEncoder { Quality = 100 },
+                PngFormat => new PngEncoder(),
+                GifFormat => new GifEncoder(),
+                _ => throw new UnreachableException(),
+            };
+
+            using var output = new MemoryStream();
+            image.Save(output, encoder);
+
+            return await SaveAsync(output.ToArray(), AttachmentKind.Image, contentType, extension, newWidth, newHeight, originalName, cancellationToken);
         }
-
-        if (withinBounds)
-        {
-            return await SaveAsync(bytes, AttachmentKind.Image, contentType, extension, width, height, originalName, cancellationToken);
-        }
-
-        using var original = SKBitmap.Decode(bytes);
-        if (original is null)
-        {
-            return AttachmentProcessingResult.Fail("INVALID_IMAGE", "The file is not a valid image.");
-        }
-
-        var scale = Math.Min((double)_options.MaxImageWidth / width, (double)_options.MaxImageHeight / height);
-        var newWidth = Math.Max(1, (int)Math.Round(width * scale));
-        var newHeight = Math.Max(1, (int)Math.Round(height * scale));
-
-        using var resizedBitmap = new SKBitmap(newWidth, newHeight);
-        using (var canvas = new SKCanvas(resizedBitmap))
-        {
-            canvas.DrawBitmap(original, new SKRect(0, 0, newWidth, newHeight), new SKSamplingOptions(SKFilterMode.Linear, SKMipmapMode.None));
-        }
-
-        using var image = SKImage.FromBitmap(resizedBitmap);
-        using var data = image.Encode(codec.EncodedFormat, 90);
-        var resizedBytes = data.ToArray();
-
-        return await SaveAsync(resizedBytes, AttachmentKind.Image, contentType, extension, newWidth, newHeight, originalName, cancellationToken);
     }
 
     private async Task<AttachmentProcessingResult> ProcessTextAsync(byte[] bytes, string originalName, CancellationToken cancellationToken)

@@ -7,7 +7,11 @@ using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
-using SkiaSharp;
+using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.Formats;
+using SixLabors.ImageSharp.Formats.Gif;
+using SixLabors.ImageSharp.Formats.Png;
+using SixLabors.ImageSharp.PixelFormats;
 using Xunit;
 
 namespace CommentHub.GraphQL.Tests;
@@ -44,21 +48,34 @@ public sealed class AttachmentProcessingServiceTests : IDisposable
     private static IFormFile MakeFile(byte[] bytes, string fileName)
         => new FormFile(new MemoryStream(bytes), 0, bytes.Length, "file", fileName);
 
-    private static byte[] CreateImageBytes(int width, int height, SKEncodedImageFormat format)
+    private static byte[] CreateImageBytes(int width, int height, IImageEncoder encoder)
     {
-        using var bitmap = new SKBitmap(width, height);
-        using var canvas = new SKCanvas(bitmap);
-        canvas.Clear(SKColors.Red);
-        using var image = SKImage.FromBitmap(bitmap);
-        using var data = image.Encode(format, 90);
-        return data.ToArray();
+        using var image = new Image<Rgba32>(width, height);
+        using var stream = new MemoryStream();
+        image.Save(stream, encoder);
+        return stream.ToArray();
+    }
+
+    private static byte[] CreateAnimatedGifBytes(int width, int height, int frameCount)
+    {
+        using var image = new Image<Rgba32>(width, height);
+        for (var i = 1; i < frameCount; i++)
+        {
+            image.Frames.AddFrame(image.Frames.RootFrame);
+        }
+
+        image.Metadata.GetGifMetadata().RepeatCount = 0;
+
+        using var stream = new MemoryStream();
+        image.Save(stream, new GifEncoder());
+        return stream.ToArray();
     }
 
     [Fact]
     public async Task Accepts_a_png_within_bounds_and_stores_it_unchanged()
     {
         var service = CreateService();
-        var bytes = CreateImageBytes(200, 150, SKEncodedImageFormat.Png);
+        var bytes = CreateImageBytes(200, 150, new PngEncoder());
 
         var result = await service.ProcessAsync(MakeFile(bytes, "photo.png"), CancellationToken.None);
 
@@ -73,7 +90,7 @@ public sealed class AttachmentProcessingServiceTests : IDisposable
     public async Task Resizes_an_oversized_png_proportionally_to_fit_the_bounds()
     {
         var service = CreateService();
-        var bytes = CreateImageBytes(800, 600, SKEncodedImageFormat.Png);
+        var bytes = CreateImageBytes(800, 600, new PngEncoder());
 
         var result = await service.ProcessAsync(MakeFile(bytes, "photo.png"), CancellationToken.None);
 
@@ -86,7 +103,7 @@ public sealed class AttachmentProcessingServiceTests : IDisposable
     public async Task Preserves_aspect_ratio_when_only_one_dimension_exceeds_the_bound()
     {
         var service = CreateService();
-        var bytes = CreateImageBytes(320, 640, SKEncodedImageFormat.Png);
+        var bytes = CreateImageBytes(320, 640, new PngEncoder());
 
         var result = await service.ProcessAsync(MakeFile(bytes, "tall.png"), CancellationToken.None);
 
@@ -122,10 +139,30 @@ public sealed class AttachmentProcessingServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task Resizes_an_oversized_animated_gif_proportionally_and_preserves_all_frames()
+    {
+        var service = CreateService();
+        const int frameCount = 3;
+        var bytes = CreateAnimatedGifBytes(800, 600, frameCount);
+
+        var result = await service.ProcessAsync(MakeFile(bytes, "anim.gif"), CancellationToken.None);
+
+        Assert.True(result.Success);
+        Assert.Equal("image/gif", result.Attachment!.ContentType);
+        Assert.Equal(320, result.Attachment.Width);
+        Assert.Equal(240, result.Attachment.Height);
+
+        var storedBytes = await File.ReadAllBytesAsync(System.IO.Path.Combine(_rootPath, result.Attachment.StoragePath));
+        using var decoded = Image.Load<Rgba32>(storedBytes);
+        Assert.Equal(frameCount, decoded.Frames.Count);
+        Assert.Equal(0, decoded.Metadata.GetGifMetadata().RepeatCount);
+    }
+
+    [Fact]
     public async Task Rejects_an_image_larger_than_the_configured_source_limit()
     {
         var service = CreateService(new AttachmentOptions { MaxImageSourceBytes = 10 });
-        var bytes = CreateImageBytes(200, 150, SKEncodedImageFormat.Png);
+        var bytes = CreateImageBytes(200, 150, new PngEncoder());
 
         var result = await service.ProcessAsync(MakeFile(bytes, "photo.png"), CancellationToken.None);
 
