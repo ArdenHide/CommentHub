@@ -1,0 +1,102 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: commenthub-postgres
+    environment:
+      POSTGRES_DB: commenthub
+      POSTGRES_USER: commenthub
+      POSTGRES_PASSWORD: commenthub
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - commenthub
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U commenthub -d commenthub"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  # Loopback-only, no security-group rule needed. Access it via:
+  #   ssh -L 8081:localhost:8081 <user>@<ec2-public-ip>
+  # then browse http://localhost:8081 on your own machine.
+  pgweb:
+    image: sosedoff/pgweb
+    container_name: commenthub-pgweb
+    environment:
+      DATABASE_URL: postgres://commenthub:commenthub@postgres:5432/commenthub?sslmode=disable
+    ports:
+      - "127.0.0.1:8081:8081"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - commenthub
+    restart: unless-stopped
+
+  # One-shot: applies EF Core migrations, then exits. Reuses the backend
+  # image's SDK build stage so no extra Dockerfile is needed for this.
+  migrator:
+    build:
+      context: ./backend
+      dockerfile: src/CommentHub.Api/Dockerfile
+      target: build
+    container_name: commenthub-migrator
+    environment:
+      ConnectionStrings__CommentHub: "Host=postgres;Port=5432;Database=commenthub;Username=commenthub;Password=commenthub"
+    command: sh -c "dotnet tool install --global dotnet-ef --version 10.0.12 && /root/.dotnet/tools/dotnet-ef database update --project src/CommentHub.Database/CommentHub.Database.csproj --startup-project src/CommentHub.Api/CommentHub.Api.csproj"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - commenthub
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: src/CommentHub.Api/Dockerfile
+    container_name: commenthub-backend
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__CommentHub: "Host=postgres;Port=5432;Database=commenthub;Username=commenthub;Password=commenthub"
+      Attachments__RootPath: /data/attachments
+    expose:
+      - "8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrator:
+        condition: service_completed_successfully
+    networks:
+      - commenthub
+    volumes:
+      - attachments-data:/data/attachments
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: commenthub-frontend
+    ports:
+      - "80:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - commenthub
+    restart: unless-stopped
+
+networks:
+  commenthub:
+    driver: bridge
+
+volumes:
+  postgres-data:
+  attachments-data:
