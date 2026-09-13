@@ -1,0 +1,26 @@
+<nav
+  class="comment-pagination d-flex justify-content-center align-items-center gap-3"
+  aria-label="Comments pages"
+>
+  <button
+    type="button"
+    class="btn btn-outline-primary btn-sm"
+    mdbRipple
+    [disabled]="currentPage() === 1"
+    (click)="goTo(currentPage() - 1)"
+  >
+    Prev
+  </button>
+
+  <span class="text-muted small">Page {{ currentPage() }} of {{ totalPages() }}</span>
+
+  <button
+    type="button"
+    class="btn btn-outline-primary btn-sm"
+    mdbRipple
+    [disabled]="currentPage() === totalPages()"
+    (click)="goTo(currentPage() + 1)"
+  >
+    Next
+  </button>
+</nav>

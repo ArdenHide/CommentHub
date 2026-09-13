@@ -40,10 +40,28 @@ function makePage(count: number, totalCount: number, offset = 0): CommentsPageDt
         userName: `User ${offset + i + 1}`,
         homePage: null,
         avatarSeed: `seed-${offset + i + 1}`,
+        maskedEmail: `u${offset + i + 1}***@example.com`,
       },
       attachment: null,
       replies: { totalCount: 0, items: [] },
     })),
+  };
+}
+
+function makeCommentNode(id: number, overrides: Partial<CommentNode> = {}): CommentNode {
+  return {
+    id,
+    authorName: `User ${id}`,
+    authorHomePage: null,
+    authorMaskedEmail: `u${id}***@example.com`,
+    avatarSeed: `seed-${id}`,
+    textHtml: `<p>Comment ${id}</p>`,
+    createdAt: '2026-09-11T10:00:00Z',
+    attachment: null,
+    replies: [],
+    repliesTotalCount: 0,
+    repliesKnown: true,
+    ...overrides,
   };
 }
 
@@ -91,7 +109,8 @@ describe('CommentsPage', () => {
     expect(commentsService.getComments).toHaveBeenCalledWith(0, 25, 'CREATED_AT', true);
     expect(component.comments()).toHaveLength(25);
     expect(component.totalCount()).toBe(60);
-    expect(component.hasMore()).toBe(true);
+    expect(component.totalPages()).toBe(3);
+    expect(component.currentPage()).toBe(1);
   });
 
   it('renders comment text with whitespace preserved so line breaks survive', () => {
@@ -102,25 +121,55 @@ describe('CommentsPage', () => {
     expect(fixture.nativeElement.querySelector('.comment-card p.comment-text')).toBeTruthy();
   });
 
-  it('appends the next page when loadMore is called', () => {
+  it('renders the top-level comments as a table with User/Email/Date/Comment columns', () => {
+    commentsService.getComments.mockReturnValue(of(makePage(1, 1)));
+
+    fixture.detectChanges();
+
+    const headers: HTMLElement[] = fixture.nativeElement.querySelectorAll('table thead th');
+    expect(Array.from(headers).map((h) => h.textContent?.trim())).toEqual([
+      'User',
+      'Email',
+      'Date',
+      'Comment',
+    ]);
+    expect(fixture.nativeElement.textContent).toContain('u1***@example.com');
+  });
+
+  it('goToPage(2) replaces the list with the second page', () => {
     commentsService.getComments
       .mockReturnValueOnce(of(makePage(25, 60)))
       .mockReturnValueOnce(of(makePage(25, 60, 25)));
 
     fixture.detectChanges();
-    component.loadMore();
+    component.goToPage(2);
 
     expect(commentsService.getComments).toHaveBeenCalledWith(25, 25, 'CREATED_AT', true);
-    expect(component.comments()).toHaveLength(50);
-    expect(component.hasMore()).toBe(true);
+    expect(component.comments()).toHaveLength(25);
+    expect(component.comments()[0].id).toBe(26);
+    expect(component.currentPage()).toBe(2);
   });
 
-  it('hides the load-more affordance once every comment is loaded', () => {
+  it('goToPage ignores out-of-range or unchanged page numbers', () => {
+    commentsService.getComments.mockReturnValue(of(makePage(10, 10)));
+
+    fixture.detectChanges();
+    const callsAfterInit = commentsService.getComments.mock.calls.length;
+
+    component.goToPage(0);
+    component.goToPage(5);
+    component.goToPage(1);
+
+    expect(commentsService.getComments.mock.calls.length).toBe(callsAfterInit);
+    expect(component.currentPage()).toBe(1);
+  });
+
+  it('totalPages is 1 when everything fits on a single page', () => {
     commentsService.getComments.mockReturnValue(of(makePage(10, 10)));
 
     fixture.detectChanges();
 
-    expect(component.hasMore()).toBe(false);
+    expect(component.totalPages()).toBe(1);
   });
 
   it('surfaces an error when loading fails', () => {
@@ -152,38 +201,39 @@ describe('CommentsPage', () => {
     commentsService.getComments.mockReturnValue(of(makePage(2, 2)));
     fixture.detectChanges();
 
-    const newNode: CommentNode = {
-      id: 100,
-      authorName: 'newbie',
-      authorHomePage: null,
-      avatarSeed: 'seed-100',
-      textHtml: '<p>hi</p>',
-      createdAt: '2026-09-11T10:00:00Z',
-      attachment: null,
-      replies: [],
-      repliesTotalCount: 0,
-      repliesKnown: true,
-    };
-
+    const newNode = makeCommentNode(100, { authorName: 'newbie' });
     component.prependComment(newNode);
 
     expect(component.comments()[0]).toBe(newNode);
     expect(component.totalCount()).toBe(3);
   });
 
+  it('prependComment trims the list back to the page size on page 1', () => {
+    commentsService.getComments.mockReturnValue(of(makePage(25, 25)));
+    fixture.detectChanges();
+
+    component.prependComment(makeCommentNode(999));
+
+    expect(component.comments()).toHaveLength(25);
+    expect(component.comments()[0].id).toBe(999);
+    expect(component.totalCount()).toBe(26);
+  });
+
+  it('prependComment does not trim the list on a page other than 1', () => {
+    commentsService.getComments
+      .mockReturnValueOnce(of(makePage(25, 60)))
+      .mockReturnValueOnce(of(makePage(25, 60, 25)));
+    fixture.detectChanges();
+    component.goToPage(2);
+
+    component.prependComment(makeCommentNode(999));
+
+    expect(component.comments()).toHaveLength(26);
+    expect(component.comments()[0].id).toBe(999);
+  });
+
   it('renders a new reply under the right comment once the reply modal closes with a result', () => {
-    const newReply: CommentNode = {
-      id: 200,
-      authorName: 'replier',
-      authorHomePage: null,
-      avatarSeed: 'seed-200',
-      textHtml: '<p>reply text</p>',
-      createdAt: '2026-09-11T10:00:00Z',
-      attachment: null,
-      replies: [],
-      repliesTotalCount: 0,
-      repliesKnown: true,
-    };
+    const newReply = makeCommentNode(200, { authorName: 'replier', textHtml: '<p>reply text</p>' });
     modalService.open.mockReturnValue({ onClose: of(newReply) });
     commentsService.getComments.mockReturnValue(of(makePage(1, 1)));
 
@@ -221,6 +271,19 @@ describe('CommentsPage', () => {
     expect(component.comments()).toHaveLength(10);
   });
 
+  it('changing the sort field resets back to page 1', () => {
+    commentsService.getComments
+      .mockReturnValueOnce(of(makePage(25, 60)))
+      .mockReturnValueOnce(of(makePage(25, 60, 25)))
+      .mockReturnValueOnce(of(makePage(10, 10)));
+
+    fixture.detectChanges();
+    component.goToPage(2);
+    component.onSortFieldChange('USER_NAME');
+
+    expect(component.currentPage()).toBe(1);
+  });
+
   it('re-selecting the same sort field or direction does not refetch', () => {
     commentsService.getComments.mockReturnValue(of(makePage(25, 60)));
 
@@ -241,7 +304,7 @@ describe('CommentsPage', () => {
     expect(realtimeService.connect).toHaveBeenCalled();
   });
 
-  it('prepends a broadcast top-level comment while sorted by newest first', () => {
+  it('prepends a broadcast top-level comment while sorted by newest first, on page 1', () => {
     commentsService.getComments.mockReturnValue(of(makePage(1, 1)));
     fixture.detectChanges();
 
@@ -249,6 +312,20 @@ describe('CommentsPage', () => {
 
     expect(component.comments()[0].textHtml).toBe('<p>live comment</p>');
     expect(component.totalCount()).toBe(2);
+  });
+
+  it('does not auto-prepend a broadcast while on a page other than 1, even sorted by newest first', () => {
+    commentsService.getComments
+      .mockReturnValueOnce(of(makePage(25, 60)))
+      .mockReturnValueOnce(of(makePage(25, 60, 25)));
+    fixture.detectChanges();
+    component.goToPage(2);
+
+    realtimeService.onCommentAdded.next(makeBroadcast(500));
+
+    expect(component.newCommentsAvailable()).toBe(1);
+    expect(component.comments()).toHaveLength(25);
+    expect(component.comments()[0].id).toBe(26);
   });
 
   it('does not touch the list for a broadcast reply', () => {
@@ -302,24 +379,24 @@ describe('CommentsPage', () => {
     expect(component.comments()).toHaveLength(2);
   });
 
-  it('ignores a stale loadMore response that resolves after the sort changed', () => {
+  it('ignores a stale page response that resolves after the sort changed', () => {
     const initial$ = new Subject<ReturnType<typeof makePage>>();
-    const loadMore$ = new Subject<ReturnType<typeof makePage>>();
+    const page2$ = new Subject<ReturnType<typeof makePage>>();
     const sorted$ = new Subject<ReturnType<typeof makePage>>();
 
     commentsService.getComments
       .mockReturnValueOnce(initial$)
-      .mockReturnValueOnce(loadMore$)
+      .mockReturnValueOnce(page2$)
       .mockReturnValueOnce(sorted$);
 
     fixture.detectChanges();
     initial$.next(makePage(25, 60));
 
-    component.loadMore();
+    component.goToPage(2);
     component.onSortFieldChange('USER_NAME');
     sorted$.next(makePage(10, 10));
 
-    loadMore$.next(makePage(25, 60, 25));
+    page2$.next(makePage(25, 60, 25));
 
     expect(component.comments()).toHaveLength(10);
     expect(component.totalCount()).toBe(10);

@@ -12,6 +12,7 @@ import { CommentAvatar } from './comment-avatar/comment-avatar.component';
 import { CommentAttachment } from './comment-attachment/comment-attachment.component';
 import { CommentFormComponent } from './comment-form/comment-form.component';
 import { CommentSortBar } from './comment-sort-bar/comment-sort-bar.component';
+import { CommentPagination } from './comment-pagination/comment-pagination.component';
 
 const PAGE_SIZE = 25;
 
@@ -25,6 +26,7 @@ export type CommentItem = CommentNode;
     CommentAvatar,
     CommentAttachment,
     CommentSortBar,
+    CommentPagination,
   ],
   selector: 'app-comments-page',
   styleUrl: './comments-page.component.scss',
@@ -44,8 +46,9 @@ export class CommentsPage implements OnInit {
   readonly sortBy = signal<CommentSortField>('CREATED_AT');
   readonly sortDescending = signal(true);
   readonly newCommentsAvailable = signal(0);
+  readonly currentPage = signal(1);
 
-  readonly hasMore = computed(() => this.comments().length < this.totalCount());
+  readonly totalPages = computed(() => Math.max(1, Math.ceil(this.totalCount() / PAGE_SIZE)));
   readonly initialLoading = computed(() => this.loading() && this.comments().length === 0);
 
   ngOnInit(): void {
@@ -57,8 +60,13 @@ export class CommentsPage implements OnInit {
       .subscribe((dto) => this.handleBroadcast(dto));
   }
 
-  loadMore(): void {
-    this.fetchPage(this.comments().length);
+  goToPage(page: number): void {
+    const target = Math.min(Math.max(page, 1), this.totalPages());
+    if (target === this.currentPage()) {
+      return;
+    }
+    this.currentPage.set(target);
+    this.fetchPage((target - 1) * PAGE_SIZE);
   }
 
   onSortFieldChange(sortBy: CommentSortField): void {
@@ -81,6 +89,7 @@ export class CommentsPage implements OnInit {
     this.comments.set([]);
     this.totalCount.set(0);
     this.newCommentsAvailable.set(0);
+    this.currentPage.set(1);
     this.fetchPage(0);
   }
 
@@ -97,9 +106,7 @@ export class CommentsPage implements OnInit {
             return;
           }
 
-          const items = page.items.map(mapCommentNode);
-
-          this.comments.update((current) => (skip === 0 ? items : [...current, ...items]));
+          this.comments.set(page.items.map(mapCommentNode));
           this.totalCount.set(page.totalCount);
           this.loading.set(false);
         },
@@ -115,7 +122,10 @@ export class CommentsPage implements OnInit {
   }
 
   prependComment(node: CommentItem): void {
-    this.comments.update((current) => [node, ...current]);
+    this.comments.update((current) => {
+      const next = [node, ...current];
+      return this.currentPage() === 1 ? next.slice(0, PAGE_SIZE) : next;
+    });
     this.totalCount.update((count) => count + 1);
   }
 
@@ -131,7 +141,7 @@ export class CommentsPage implements OnInit {
       return;
     }
 
-    if (this.sortBy() === 'CREATED_AT' && this.sortDescending()) {
+    if (this.sortBy() === 'CREATED_AT' && this.sortDescending() && this.currentPage() === 1) {
       this.prependComment(mapBroadcastToNode(dto));
     } else {
       this.newCommentsAvailable.update((count) => count + 1);
