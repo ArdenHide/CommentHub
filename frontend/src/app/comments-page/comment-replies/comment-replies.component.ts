@@ -1,9 +1,11 @@
 import { Component, computed, effect, inject, input, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { DatePipe } from '@angular/common';
 import { MdbModalService } from 'mdb-angular-ui-kit/modal';
 import { MdbRippleModule } from 'mdb-angular-ui-kit/ripple';
-import { CommentNode, mapRepliesPage } from '../comment-node.mapper';
+import { CommentNode, mapBroadcastToNode, mapRepliesPage } from '../comment-node.mapper';
 import { CommentsService } from '../comments.service';
+import { CommentsRealtimeService } from '../comments-realtime.service';
 import { CommentAvatar } from '../comment-avatar/comment-avatar.component';
 import { CommentAttachment } from '../comment-attachment/comment-attachment.component';
 import { CommentFormComponent } from '../comment-form/comment-form.component';
@@ -18,6 +20,7 @@ const PREVIEW_SIZE = 1;
 })
 export class CommentReplies {
   private readonly commentsService = inject(CommentsService);
+  private readonly realtimeService = inject(CommentsRealtimeService);
   private readonly modalService = inject(MdbModalService);
   private discoveryRequested = false;
 
@@ -91,6 +94,21 @@ export class CommentReplies {
         },
         error: () => this.discoveredTotalCount.set(0),
       });
+    });
+
+    this.realtimeService.onCommentAdded.pipe(takeUntilDestroyed()).subscribe((dto) => {
+      if (dto.parentId !== this.node().id) {
+        return;
+      }
+
+      const visible =
+        this.fullReplies() ??
+        (this.node().repliesKnown ? this.node().replies : (this.discoveredPreview() ?? []));
+      if (visible.some((reply) => reply.id === dto.id)) {
+        return;
+      }
+
+      this.receiveNewReply(mapBroadcastToNode(dto));
     });
   }
 

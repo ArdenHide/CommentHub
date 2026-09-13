@@ -1,11 +1,34 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { of, throwError } from 'rxjs';
+import { of, Subject, throwError } from 'rxjs';
 import { MdbModalService } from 'mdb-angular-ui-kit/modal';
 import { CommentReplies } from './comment-replies.component';
 import { CommentFormComponent } from '../comment-form/comment-form.component';
 import { CommentsService } from '../comments.service';
+import { CommentsRealtimeService, CommentBroadcastDto } from '../comments-realtime.service';
 import { CommentNode } from '../comment-node.mapper';
 import { RepliesPageDto } from '../graphql/get-comments.query';
+
+function makeBroadcast(
+  id: number,
+  parentId: number,
+  overrides: Partial<CommentBroadcastDto> = {},
+): CommentBroadcastDto {
+  return {
+    id,
+    parentId,
+    rootId: parentId,
+    textHtml: `<p>Broadcast reply ${id}</p>`,
+    createdAt: '2026-09-13T10:00:00Z',
+    user: {
+      userName: `User ${id}`,
+      homePage: null,
+      avatarSeed: `seed-${id}`,
+      maskedEmail: `u***@example.com`,
+    },
+    attachment: null,
+    ...overrides,
+  };
+}
 
 function makeNode(id: number, overrides: Partial<CommentNode> = {}): CommentNode {
   return {
@@ -41,16 +64,19 @@ describe('CommentReplies', () => {
   let fixture: ComponentFixture<CommentReplies>;
   let commentsService: { getReplies: ReturnType<typeof vi.fn> };
   let modalService: { open: ReturnType<typeof vi.fn> };
+  let commentAdded$: Subject<CommentBroadcastDto>;
 
   beforeEach(async () => {
     commentsService = { getReplies: vi.fn() };
     modalService = { open: vi.fn() };
+    commentAdded$ = new Subject<CommentBroadcastDto>();
 
     await TestBed.configureTestingModule({
       imports: [CommentReplies],
       providers: [
         { provide: CommentsService, useValue: commentsService },
         { provide: MdbModalService, useValue: modalService },
+        { provide: CommentsRealtimeService, useValue: { onCommentAdded: commentAdded$ } },
       ],
     }).compileComponents();
 
@@ -309,5 +335,35 @@ describe('CommentReplies', () => {
     const topLevelCards = fixture.nativeElement.querySelector('ul.reply-list').children;
     expect(topLevelCards[0].textContent).not.toContain('zzz');
     expect(topLevelCards[1].textContent).toContain('zzz');
+  });
+
+  it('adds a broadcast reply addressed to this node', () => {
+    setNode(makeNode(1, { repliesTotalCount: 1, replies: [makeNode(2)] }));
+
+    commentAdded$.next(makeBroadcast(99, 1, { textHtml: '<p>live reply</p>' }));
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.textContent).toContain('live reply');
+    expect(fixture.componentInstance.repliesTotalCount()).toBe(2);
+  });
+
+  it('ignores a broadcast addressed to a different parent', () => {
+    setNode(makeNode(1, { repliesTotalCount: 1, replies: [makeNode(2)] }));
+
+    commentAdded$.next(makeBroadcast(99, 42, { textHtml: '<p>someone else</p>' }));
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.textContent).not.toContain('someone else');
+    expect(fixture.componentInstance.repliesTotalCount()).toBe(1);
+  });
+
+  it('ignores a broadcast for a reply that is already visible (dedup by id)', () => {
+    setNode(makeNode(1, { repliesTotalCount: 1, replies: [makeNode(2)] }));
+
+    commentAdded$.next(makeBroadcast(2, 1, { textHtml: '<p>duplicate</p>' }));
+    fixture.detectChanges();
+
+    expect(fixture.componentInstance.repliesTotalCount()).toBe(1);
+    expect(fixture.nativeElement.textContent).not.toContain('duplicate');
   });
 });

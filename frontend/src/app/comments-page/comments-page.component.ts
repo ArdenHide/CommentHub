@@ -1,9 +1,11 @@
-import { Component, OnInit, computed, inject, signal } from '@angular/core';
+import { Component, DestroyRef, OnInit, computed, inject, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { DatePipe } from '@angular/common';
 import { MdbModalService } from 'mdb-angular-ui-kit/modal';
 import { MdbRippleModule } from 'mdb-angular-ui-kit/ripple';
 import { CommentsService } from './comments.service';
-import { CommentNode, mapCommentNode } from './comment-node.mapper';
+import { CommentsRealtimeService, CommentBroadcastDto } from './comments-realtime.service';
+import { CommentNode, mapBroadcastToNode, mapCommentNode } from './comment-node.mapper';
 import { CommentSortField } from './graphql/get-comments.query';
 import { CommentReplies } from './comment-replies/comment-replies.component';
 import { CommentAvatar } from './comment-avatar/comment-avatar.component';
@@ -16,14 +18,23 @@ const PAGE_SIZE = 25;
 export type CommentItem = CommentNode;
 
 @Component({
-  imports: [DatePipe, MdbRippleModule, CommentReplies, CommentAvatar, CommentAttachment, CommentSortBar],
+  imports: [
+    DatePipe,
+    MdbRippleModule,
+    CommentReplies,
+    CommentAvatar,
+    CommentAttachment,
+    CommentSortBar,
+  ],
   selector: 'app-comments-page',
   styleUrl: './comments-page.component.scss',
   templateUrl: './comments-page.component.html',
 })
 export class CommentsPage implements OnInit {
   private readonly commentsService = inject(CommentsService);
+  private readonly realtimeService = inject(CommentsRealtimeService);
   private readonly modalService = inject(MdbModalService);
+  private readonly destroyRef = inject(DestroyRef);
   private requestSeq = 0;
 
   readonly comments = signal<CommentItem[]>([]);
@@ -32,12 +43,18 @@ export class CommentsPage implements OnInit {
   readonly error = signal<string | null>(null);
   readonly sortBy = signal<CommentSortField>('CREATED_AT');
   readonly sortDescending = signal(true);
+  readonly newCommentsAvailable = signal(0);
 
   readonly hasMore = computed(() => this.comments().length < this.totalCount());
   readonly initialLoading = computed(() => this.loading() && this.comments().length === 0);
 
   ngOnInit(): void {
     this.fetchPage(0);
+
+    this.realtimeService.connect();
+    this.realtimeService.onCommentAdded
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((dto) => this.handleBroadcast(dto));
   }
 
   loadMore(): void {
@@ -63,6 +80,7 @@ export class CommentsPage implements OnInit {
   private resetAndReload(): void {
     this.comments.set([]);
     this.totalCount.set(0);
+    this.newCommentsAvailable.set(0);
     this.fetchPage(0);
   }
 
@@ -99,6 +117,25 @@ export class CommentsPage implements OnInit {
   prependComment(node: CommentItem): void {
     this.comments.update((current) => [node, ...current]);
     this.totalCount.update((count) => count + 1);
+  }
+
+  refreshForNewComments(): void {
+    this.resetAndReload();
+  }
+
+  private handleBroadcast(dto: CommentBroadcastDto): void {
+    if (dto.parentId !== null) {
+      return;
+    }
+    if (this.comments().some((comment) => comment.id === dto.id)) {
+      return;
+    }
+
+    if (this.sortBy() === 'CREATED_AT' && this.sortDescending()) {
+      this.prependComment(mapBroadcastToNode(dto));
+    } else {
+      this.newCommentsAvailable.update((count) => count + 1);
+    }
   }
 
   onReply(comment: CommentItem, repliesRef: CommentReplies): void {

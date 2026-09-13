@@ -40,7 +40,7 @@ public sealed record CommentUserDto(string UserName, string? HomePage, string Av
 
 public sealed record CommentAttachmentDto(
     long Id,
-    AttachmentKind Kind,
+    string Kind,
     string OriginalName,
     string ContentType,
     int SizeBytes,
@@ -50,7 +50,7 @@ public sealed record CommentAttachmentDto(
 {
     public static CommentAttachmentDto From(Attachment attachment) => new(
         attachment.Id,
-        attachment.Kind,
+        attachment.Kind.ToString().ToUpperInvariant(),
         attachment.OriginalName,
         attachment.ContentType,
         attachment.SizeBytes,

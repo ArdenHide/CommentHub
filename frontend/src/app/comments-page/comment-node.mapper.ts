@@ -1,5 +1,6 @@
 import { CommentAttachmentDto, CommentNodeDto, RepliesPageDto } from './graphql/get-comments.query';
 import { AddedCommentDto } from './graphql/add-comment.mutation';
+import { CommentBroadcastDto } from './comments-realtime.service';
 
 export interface CommentNode {
   id: number;
@@ -36,6 +37,21 @@ export function mapCommentNode(dto: CommentNodeDto): CommentNode {
 }
 
 export function mapNewComment(dto: AddedCommentDto): CommentNode {
+  return {
+    id: dto.id,
+    authorName: dto.user.userName,
+    authorHomePage: dto.user.homePage,
+    avatarSeed: dto.user.avatarSeed,
+    textHtml: dto.textHtml,
+    createdAt: dto.createdAt,
+    attachment: dto.attachment,
+    replies: [],
+    repliesTotalCount: 0,
+    repliesKnown: true,
+  };
+}
+
+export function mapBroadcastToNode(dto: CommentBroadcastDto): CommentNode {
   return {
     id: dto.id,
     authorName: dto.user.userName,
