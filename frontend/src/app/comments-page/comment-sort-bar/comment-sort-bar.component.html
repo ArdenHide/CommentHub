@@ -1,0 +1,23 @@
+<div class="comment-sort-bar d-flex align-items-center gap-2 mb-3">
+  <label class="form-label mb-0 small text-muted" for="comment-sort-field">Sort by</label>
+  <select
+    id="comment-sort-field"
+    class="form-select form-select-sm w-auto"
+    (change)="onFieldChange($any($event.target).value)"
+  >
+    @for (option of options; track option.value) {
+      <option [value]="option.value" [selected]="option.value === sortBy()">{{ option.label }}</option>
+    }
+  </select>
+
+  <button
+    type="button"
+    class="btn btn-outline-primary btn-sm"
+    mdbRipple
+    (click)="toggleDirection()"
+    [attr.aria-label]="descending() ? 'Sort descending' : 'Sort ascending'"
+    [title]="descending() ? 'Descending' : 'Ascending'"
+  >
+    <i class="fa" [class.fa-arrow-down-wide-short]="descending()" [class.fa-arrow-up-wide-short]="!descending()"></i>
+  </button>
+</div>

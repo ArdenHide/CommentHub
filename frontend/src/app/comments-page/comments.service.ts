@@ -2,6 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { Apollo } from 'apollo-angular';
 import { map, Observable } from 'rxjs';
 import {
+  CommentSortField,
   CommentsPageDto,
   GET_COMMENTS_QUERY,
   GetCommentsResult,
@@ -25,11 +26,16 @@ import {
 export class CommentsService {
   private readonly apollo = inject(Apollo);
 
-  getComments(skip: number, take: number): Observable<CommentsPageDto> {
+  getComments(
+    skip: number,
+    take: number,
+    sortBy: CommentSortField = 'CREATED_AT',
+    descending = true,
+  ): Observable<CommentsPageDto> {
     return this.apollo
       .query<GetCommentsResult, GetCommentsVariables>({
         query: GET_COMMENTS_QUERY,
-        variables: { skip, take },
+        variables: { skip, take, sortBy, descending },
         fetchPolicy: 'network-only',
       })
       .pipe(

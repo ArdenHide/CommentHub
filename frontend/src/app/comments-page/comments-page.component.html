@@ -8,6 +8,13 @@
     <div class="alert alert-danger" role="alert">{{ error() }}</div>
   }
 
+  <app-comment-sort-bar
+    [sortBy]="sortBy()"
+    [descending]="sortDescending()"
+    (sortByChange)="onSortFieldChange($event)"
+    (descendingChange)="onSortDirectionChange($event)"
+  />
+
   @if (initialLoading()) {
     <p class="text-muted">Loading comments…</p>
   } @else {

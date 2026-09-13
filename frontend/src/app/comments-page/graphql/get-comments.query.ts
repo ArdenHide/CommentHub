@@ -1,8 +1,8 @@
 import { gql } from 'apollo-angular';
 
 export const GET_COMMENTS_QUERY = gql`
-  query GetComments($skip: Int, $take: Int) {
-    comments(skip: $skip, take: $take) {
+  query GetComments($skip: Int, $take: Int, $sortBy: CommentSortField, $descending: Boolean) {
+    comments(skip: $skip, take: $take, sortBy: $sortBy, descending: $descending) {
       totalCount
       items {
         ...CommentNodeFields
@@ -116,7 +116,11 @@ export interface GetCommentsResult {
   comments: CommentsPageDto;
 }
 
+export type CommentSortField = 'CREATED_AT' | 'USER_NAME' | 'EMAIL';
+
 export interface GetCommentsVariables {
   skip: number;
   take: number;
+  sortBy?: CommentSortField;
+  descending?: boolean;
 }

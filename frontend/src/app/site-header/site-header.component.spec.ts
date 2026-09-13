@@ -9,6 +9,7 @@ function makeNode(id: number): CommentNode {
   return {
     id,
     authorName: 'alice',
+    authorHomePage: null,
     avatarSeed: 'seed',
     textHtml: '<p>hi</p>',
     createdAt: '2026-09-11T10:00:00Z',

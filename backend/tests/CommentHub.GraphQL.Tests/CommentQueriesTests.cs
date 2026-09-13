@@ -302,6 +302,104 @@ public sealed class CommentQueriesTests(PostgresFixture postgres) : IAsyncLifeti
     }
 
     [Fact]
+    public async Task Comments_can_be_sorted_by_user_name_ascending_and_descending()
+    {
+        const string query = """
+            query($descending: Boolean) {
+              comments(sortBy: USER_NAME, descending: $descending) { items { textHtml } }
+            }
+            """;
+
+        using var ascending = await _client.PostGraphQLAsync(query, new { descending = false });
+        var ascendingItems = ascending.RootElement.GetProperty("data").GetProperty("comments")
+            .GetProperty("items").EnumerateArray().Select(item => item.GetProperty("textHtml").GetString()).ToArray();
+        Assert.Equal(["<p>root1</p>", "<p>root2</p>"], ascendingItems);
+
+        using var descending = await _client.PostGraphQLAsync(query, new { descending = true });
+        var descendingItems = descending.RootElement.GetProperty("data").GetProperty("comments")
+            .GetProperty("items").EnumerateArray().Select(item => item.GetProperty("textHtml").GetString()).ToArray();
+        Assert.Equal(["<p>root2</p>", "<p>root1</p>"], descendingItems);
+    }
+
+    [Fact]
+    public async Task Comments_can_be_sorted_by_created_at_ascending()
+    {
+        const string query = """
+            { comments(sortBy: CREATED_AT, descending: false) { items { textHtml } } }
+            """;
+
+        using var result = await _client.PostGraphQLAsync(query);
+        var items = result.RootElement.GetProperty("data").GetProperty("comments")
+            .GetProperty("items").EnumerateArray().Select(item => item.GetProperty("textHtml").GetString()).ToArray();
+
+        Assert.Equal(["<p>root1</p>", "<p>root2</p>"], items);
+    }
+
+    [Fact]
+    public async Task Comments_can_be_sorted_by_email_without_exposing_it()
+    {
+        const string query = """
+            { comments(sortBy: EMAIL, descending: false) { items { textHtml } } }
+            """;
+
+        using var result = await _client.PostGraphQLAsync(query);
+        var items = result.RootElement.GetProperty("data").GetProperty("comments")
+            .GetProperty("items").EnumerateArray().Select(item => item.GetProperty("textHtml").GetString()).ToArray();
+
+        Assert.Equal(["<p>root1</p>", "<p>root2</p>"], items);
+    }
+
+    [Fact]
+    public async Task CommentSortField_enum_exposes_the_expected_values()
+    {
+        using var result = await _client.PostGraphQLAsync(
+            """{ __type(name: "CommentSortField") { enumValues { name } } }"""
+        );
+
+        var values = result.RootElement.GetProperty("data").GetProperty("__type").GetProperty("enumValues")
+            .EnumerateArray().Select(value => value.GetProperty("name").GetString()).ToHashSet();
+
+        Assert.Equal(new HashSet<string?> { "CREATED_AT", "USER_NAME", "EMAIL" }, values);
+    }
+
+    [Fact]
+    public async Task Comments_sorted_by_user_name_break_ties_by_created_at_and_id()
+    {
+        await using (var dbContext = _postgres.CreateDbContext())
+        {
+            var now = DateTimeOffset.UtcNow;
+            var carol = new User { UserName = "alice", Email = "carol@example.com" };
+            var dave = new User { UserName = "alice", Email = "dave@example.com" };
+            dbContext.Users.AddRange(carol, dave);
+            await dbContext.SaveChangesAsync();
+
+            dbContext.Comments.AddRange(
+                new Comment { User = carol, TextHtml = "<p>root3</p>", CreatedAt = now.AddMinutes(-2) },
+                new Comment { User = dave, TextHtml = "<p>root4</p>", CreatedAt = now.AddMinutes(-1) }
+            );
+            await dbContext.SaveChangesAsync();
+        }
+
+        const string query = """
+            query($skip: Int) {
+              comments(skip: $skip, take: 1, sortBy: USER_NAME, descending: false) { items { textHtml } }
+            }
+            """;
+
+        var seenTexts = new List<string>();
+        for (var skip = 0; skip < 4; skip++)
+        {
+            using var page = await _client.PostGraphQLAsync(query, new { skip });
+            var items = page.RootElement.GetProperty("data").GetProperty("comments")
+                .GetProperty("items").EnumerateArray().ToArray();
+            seenTexts.Add(items.Single().GetProperty("textHtml").GetString()!);
+        }
+
+        Assert.Equal(4, seenTexts.Distinct().Count());
+        Assert.Equal(["<p>root1</p>", "<p>root3</p>", "<p>root4</p>", "<p>root2</p>"], seenTexts);
+    }
+
+    [Fact]
     public async Task User_type_does_not_expose_email()
     {
         using var result = await _client.PostGraphQLAsync(
