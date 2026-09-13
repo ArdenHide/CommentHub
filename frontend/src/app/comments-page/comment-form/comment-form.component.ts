@@ -19,6 +19,20 @@ const MAX_TEXT_BYTES = 100 * 1024;
 const ATTACHMENT_EXTENSION_PATTERN = /\.(jpe?g|gif|png|txt)$/i;
 const IMAGE_EXTENSION_PATTERN = /\.(jpe?g|gif|png)$/i;
 
+function generateUuid(): string {
+  if (typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+
+  const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
 function escapeAttr(value: string): string {
   return value.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
 }
@@ -59,7 +73,7 @@ export class CommentFormComponent implements OnDestroy {
   readonly linkPromptOpen = signal(false);
   readonly linkHref = signal('');
   readonly linkTitle = signal('');
-  readonly captchaId = signal(crypto.randomUUID());
+  readonly captchaId = signal(generateUuid());
   readonly captchaImageUrl = computed(() => `${environment.apiBaseUrl}/captcha/${this.captchaId()}`);
 
   readonly attachmentStatus = signal<AttachmentStatus>('idle');
@@ -183,7 +197,7 @@ export class CommentFormComponent implements OnDestroy {
   }
 
   refreshCaptcha(): void {
-    this.captchaId.set(crypto.randomUUID());
+    this.captchaId.set(generateUuid());
     this.form.controls.captchaCode.setValue('');
   }
 
