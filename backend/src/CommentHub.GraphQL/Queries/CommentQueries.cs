@@ -1,5 +1,6 @@
 using CommentHub.Database;
 using CommentHub.Database.Entities;
+using CommentHub.GraphQL.Realtime;
 using CommentHub.GraphQL.Types;
 using Microsoft.EntityFrameworkCore;
 
@@ -8,16 +9,34 @@ namespace CommentHub.GraphQL.Queries;
 [QueryType]
 public static partial class CommentQueries
 {
-    public static async Task<CommentPage> GetCommentsAsync(
+    public static Task<CommentPage> GetCommentsAsync(
         CommentHubDbContext dbContext,
+        ICommentsCache cache,
         CancellationToken cancellationToken,
         int skip = 0,
         int take = 25,
         CommentSortField sortBy = CommentSortField.CreatedAt,
         bool descending = true
     )
+        => cache.GetOrCreateTopLevelAsync(
+            sortBy,
+            descending,
+            skip,
+            take,
+            () => LoadTopLevelFromDatabaseAsync(dbContext, sortBy, descending, skip, take, cancellationToken)
+        );
+
+    private static async Task<CommentPage> LoadTopLevelFromDatabaseAsync(
+        CommentHubDbContext dbContext,
+        CommentSortField sortBy,
+        bool descending,
+        int skip,
+        int take,
+        CancellationToken cancellationToken
+    )
     {
         var query = dbContext.Comments
+            .AsNoTracking()
             .Where(comment => comment.ParentId == null)
             .Include(comment => comment.User)
             .Include(comment => comment.Attachments);

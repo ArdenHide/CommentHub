@@ -1,5 +1,6 @@
 using CommentHub.Database;
 using CommentHub.Database.Entities;
+using CommentHub.GraphQL.Realtime;
 using CommentHub.GraphQL.Services;
 using CommentHub.GraphQL.Types;
 using CommentHub.GraphQL.Validation;
@@ -16,6 +17,7 @@ public static partial class CommentMutations
         CommentHubDbContext dbContext,
         IValidator<AddCommentInput> validator,
         IPendingAttachmentService pendingAttachments,
+        ICommentEventPublisher eventPublisher,
         CancellationToken cancellationToken
     )
     {
@@ -105,6 +107,8 @@ public static partial class CommentMutations
         }
 
         await dbContext.SaveChangesAsync(cancellationToken);
+
+        eventPublisher.Publish(new CommentAddedEvent(comment.Id, comment.ParentId, comment.RootId ?? comment.Id));
 
         return new AddCommentPayload(comment, []);
     }
