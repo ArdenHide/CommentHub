@@ -349,6 +349,18 @@ describe('CommentsPage', () => {
     expect(component.totalCount()).toBe(1);
   });
 
+  it('does not duplicate a comment when the SignalR echo of it arrives after the direct prepend from posting it', () => {
+    commentsService.getComments.mockReturnValue(of(makePage(1, 1)));
+    fixture.detectChanges();
+
+    const ownNode = makeCommentNode(500, { authorName: 'me' });
+    component.prependComment(ownNode);
+    realtimeService.onCommentAdded.next(makeBroadcast(500));
+
+    expect(component.comments().filter((comment) => comment.id === 500)).toHaveLength(1);
+    expect(component.totalCount()).toBe(2);
+  });
+
   it('counts new comments instead of reordering when not sorted by newest first', () => {
     commentsService.getComments
       .mockReturnValueOnce(of(makePage(1, 1)))

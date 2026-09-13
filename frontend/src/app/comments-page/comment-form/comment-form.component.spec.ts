@@ -89,6 +89,41 @@ describe('CommentFormComponent', () => {
     component.onFileSelected({ target: input } as unknown as Event);
   }
 
+  function editor(): HTMLElement {
+    return fixture.nativeElement.querySelector('#cf-text');
+  }
+
+  function selectRange(
+    startNode: Node,
+    startOffset: number,
+    endNode: Node,
+    endOffset: number,
+  ): void {
+    const range = document.createRange();
+    range.setStart(startNode, startOffset);
+    range.setEnd(endNode, endOffset);
+    const selection = window.getSelection()!;
+    selection.removeAllRanges();
+    selection.addRange(range);
+  }
+
+  function selectAll(node: Node): void {
+    const range = document.createRange();
+    range.selectNodeContents(node);
+    const selection = window.getSelection()!;
+    selection.removeAllRanges();
+    selection.addRange(range);
+  }
+
+  function collapseCaretAtEnd(node: Node): void {
+    const range = document.createRange();
+    range.selectNodeContents(node);
+    range.collapse(false);
+    const selection = window.getSelection()!;
+    selection.removeAllRanges();
+    selection.addRange(range);
+  }
+
   beforeEach(async () => {
     vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:mock-url');
     vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
@@ -198,34 +233,44 @@ describe('CommentFormComponent', () => {
     vi.useRealTimers();
   });
 
-  it('wraps the textarea selection with the Bold/Italic/Code toolbar buttons', () => {
+  it('wraps the selected text in <strong> in place when clicking Bold', () => {
+    fixture.detectChanges();
+    editor().textContent = 'hello world';
+    const text = editor().firstChild!;
+
+    selectRange(text, 0, text, 5);
+    component.toggleFormat('bold');
     fixture.detectChanges();
 
-    component.form.controls.text.setValue('hello world');
-    fixture.detectChanges();
-
-    const textarea: HTMLTextAreaElement = fixture.nativeElement.querySelector('#cf-text');
-    textarea.selectionStart = 0;
-    textarea.selectionEnd = 5;
-
-    component.wrapSelection('<strong>', '</strong>');
+    expect(editor().innerHTML).toBe('<strong>hello</strong> world');
     expect(component.form.controls.text.value).toBe('<strong>hello</strong> world');
+  });
+
+  it('removes bold formatting when Bold is clicked again on an already-bold selection', () => {
+    fixture.detectChanges();
+    editor().innerHTML = '<strong>hello</strong> world';
+    selectAll(editor().querySelector('strong')!);
+
+    component.toggleFormat('bold');
+    fixture.detectChanges();
+
+    expect(editor().innerHTML).toBe('hello world');
+    expect(component.form.controls.text.value).toBe('hello world');
   });
 
   it('inserts a link tag from the link toolbar mini-form', () => {
     fixture.detectChanges();
-    component.form.controls.text.setValue('click here');
-    fixture.detectChanges();
-
-    const textarea: HTMLTextAreaElement = fixture.nativeElement.querySelector('#cf-text');
-    textarea.selectionStart = 0;
-    textarea.selectionEnd = 10;
+    editor().textContent = 'click here';
+    const text = editor().firstChild!;
+    selectRange(text, 0, text, 10);
 
     component.toggleLinkPrompt();
     component.linkHref.set('https://example.com');
     component.linkTitle.set('Example');
     component.insertLink();
+    fixture.detectChanges();
 
+    expect(editor().innerHTML).toBe('<a href="https://example.com" title="Example">click here</a>');
     expect(component.form.controls.text.value).toBe(
       '<a href="https://example.com" title="Example">click here</a>',
     );
@@ -235,80 +280,41 @@ describe('CommentFormComponent', () => {
   it('escapes &, < and > in the selection when wrapping it in <code>', () => {
     fixture.detectChanges();
     const snippet = 'if (a < b) { return a & b; }';
-    component.form.controls.text.setValue(snippet);
+    editor().textContent = snippet;
+    selectAll(editor());
+
+    component.toggleFormat('code');
     fixture.detectChanges();
-
-    const textarea: HTMLTextAreaElement = fixture.nativeElement.querySelector('#cf-text');
-    textarea.selectionStart = 0;
-    textarea.selectionEnd = snippet.length;
-
-    component.wrapSelection('<code>', '</code>', true);
 
     expect(component.form.controls.text.value).toBe(
       '<code>if (a &lt; b) { return a &amp; b; }</code>',
     );
   });
 
-  it('escapes a <code> block that was typed by hand, not produced by the toolbar', () => {
-    fixture.detectChanges();
-    setValid();
-    component.form.controls.text.setValue(
-      'Before.\n<code>\nif (a < b)\n{\n    // do something\n}\n</code>\nAfter.',
-    );
-
-    commentsService.addComment.mockReturnValue(of(successPayload()));
-    component.submit();
-
-    expect(commentsService.addComment).toHaveBeenCalledWith(
-      expect.objectContaining({
-        text: 'Before.\n<code>\nif (a &lt; b)\n{\n    // do something\n}\n</code>\nAfter.',
-      }),
-    );
-  });
-
-  it('does not double-escape a hand-typed <code> block that already uses entities', () => {
-    fixture.detectChanges();
-    setValid();
-    component.form.controls.text.setValue('<code>a &lt; b &amp;&amp; c &gt; d</code>');
-
-    commentsService.addComment.mockReturnValue(of(successPayload()));
-    component.submit();
-
-    expect(commentsService.addComment).toHaveBeenCalledWith(
-      expect.objectContaining({ text: '<code>a &lt; b &amp;&amp; c &gt; d</code>' }),
-    );
-  });
-
   it('escapes &, < and > in the selection when inserting a link', () => {
     fixture.detectChanges();
     const snippet = 'a < b';
-    component.form.controls.text.setValue(snippet);
-    fixture.detectChanges();
-
-    const textarea: HTMLTextAreaElement = fixture.nativeElement.querySelector('#cf-text');
-    textarea.selectionStart = 0;
-    textarea.selectionEnd = snippet.length;
+    editor().textContent = snippet;
+    selectAll(editor());
 
     component.toggleLinkPrompt();
     component.linkHref.set('https://example.com');
     component.insertLink();
+    fixture.detectChanges();
 
     expect(component.form.controls.text.value).toBe('<a href="https://example.com">a &lt; b</a>');
   });
 
   it('falls back to the title as link text when nothing is selected', () => {
     fixture.detectChanges();
-    component.form.controls.text.setValue('Check this out: ');
-    fixture.detectChanges();
-
-    const textarea: HTMLTextAreaElement = fixture.nativeElement.querySelector('#cf-text');
-    textarea.selectionStart = textarea.value.length;
-    textarea.selectionEnd = textarea.value.length;
+    editor().textContent = 'Check this out: ';
+    collapseCaretAtEnd(editor());
 
     component.toggleLinkPrompt();
     component.linkHref.set('https://example.com');
     component.linkTitle.set('CommentHub');
     component.insertLink();
+    fixture.detectChanges();
 
     expect(component.form.controls.text.value).toBe(
       'Check this out: <a href="https://example.com" title="CommentHub">CommentHub</a>',
@@ -317,16 +323,13 @@ describe('CommentFormComponent', () => {
 
   it('falls back to the href as link text when nothing is selected and no title was given, instead of an empty <a>', () => {
     fixture.detectChanges();
-    component.form.controls.text.setValue('Check this out: ');
-    fixture.detectChanges();
-
-    const textarea: HTMLTextAreaElement = fixture.nativeElement.querySelector('#cf-text');
-    textarea.selectionStart = textarea.value.length;
-    textarea.selectionEnd = textarea.value.length;
+    editor().textContent = 'Check this out: ';
+    collapseCaretAtEnd(editor());
 
     component.toggleLinkPrompt();
     component.linkHref.set('https://example.com');
     component.insertLink();
+    fixture.detectChanges();
 
     expect(component.form.controls.text.value).toBe(
       'Check this out: <a href="https://example.com">https://example.com</a>',
@@ -560,5 +563,106 @@ describe('CommentFormComponent', () => {
     component.cancel();
 
     expect(attachmentUploadService.cancel).not.toHaveBeenCalled();
+  });
+
+  it('formats subsequently typed text as bold after clicking Bold with no selection (typing mode)', () => {
+    fixture.detectChanges();
+    editor().textContent = 'hello ';
+    collapseCaretAtEnd(editor());
+
+    component.toggleFormat('bold');
+    fixture.detectChanges();
+
+    const event = new InputEvent('beforeinput', {
+      inputType: 'insertText',
+      data: 'world',
+      cancelable: true,
+    });
+    editor().dispatchEvent(event);
+    fixture.detectChanges();
+
+    expect(editor().innerHTML).toBe('hello <strong>world</strong>');
+    expect(component.form.controls.text.value).toBe('hello <strong>world</strong>');
+  });
+
+  it('stops formatting typed text once the typing-mode format is toggled off again', () => {
+    fixture.detectChanges();
+    editor().textContent = '';
+    collapseCaretAtEnd(editor());
+
+    component.toggleFormat('bold');
+    editor().dispatchEvent(
+      new InputEvent('beforeinput', { inputType: 'insertText', data: 'bold', cancelable: true }),
+    );
+    component.toggleFormat('bold');
+    editor().dispatchEvent(
+      new InputEvent('beforeinput', { inputType: 'insertText', data: 'plain', cancelable: true }),
+    );
+    fixture.detectChanges();
+
+    expect(component.pendingFormats().has('bold')).toBe(false);
+    expect(editor().innerHTML).toBe('<strong>bold</strong>plain');
+    expect(component.form.controls.text.value).toBe('<strong>bold</strong>plain');
+  });
+
+  it('inserts a literal newline instead of a browser paragraph break on Enter', () => {
+    fixture.detectChanges();
+    editor().textContent = 'line one';
+    collapseCaretAtEnd(editor());
+
+    const event = new KeyboardEvent('keydown', { key: 'Enter', cancelable: true });
+    const preventSpy = vi.spyOn(event, 'preventDefault');
+    editor().dispatchEvent(event);
+    fixture.detectChanges();
+
+    expect(preventSpy).toHaveBeenCalled();
+    expect(component.form.controls.text.value).toBe('line one\n');
+  });
+
+  it('inserts only plain text on paste, ignoring rich clipboard content', () => {
+    fixture.detectChanges();
+    editor().textContent = 'before ';
+    collapseCaretAtEnd(editor());
+
+    const clipboardData = { getData: vi.fn().mockReturnValue('line1\nline2') };
+    const event = new Event('paste', { cancelable: true }) as ClipboardEvent;
+    Object.defineProperty(event, 'clipboardData', { value: clipboardData });
+    editor().dispatchEvent(event);
+    fixture.detectChanges();
+
+    expect(component.form.controls.text.value).toBe('before line1\nline2');
+  });
+
+  it('disables Bold/Italic/Link while the selection is inside a <code> span, and disables Code while Bold/Italic is active', () => {
+    fixture.detectChanges();
+    editor().innerHTML = '<code>snippet</code> plain';
+    selectAll(editor().querySelector('code')!);
+    component.refreshActiveFormats();
+    fixture.detectChanges();
+
+    const boldBtn: HTMLButtonElement = fixture.nativeElement.querySelector('[aria-label="Bold"]');
+    const codeBtn: HTMLButtonElement = fixture.nativeElement.querySelector('[aria-label="Code"]');
+    expect(boldBtn.disabled).toBe(true);
+    expect(codeBtn.disabled).toBe(false);
+
+    editor().innerHTML = '<strong>bold text</strong>';
+    selectAll(editor().querySelector('strong')!);
+    component.refreshActiveFormats();
+    fixture.detectChanges();
+
+    expect(codeBtn.disabled).toBe(true);
+    expect(boldBtn.disabled).toBe(false);
+  });
+
+  it('keeps the formatting toolbar visible at all times', () => {
+    fixture.detectChanges();
+    editor().textContent = 'hello';
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('[aria-label="Bold"]')).toBeTruthy();
+    expect(fixture.nativeElement.querySelector('[aria-label="Italic"]')).toBeTruthy();
+    expect(fixture.nativeElement.querySelector('[aria-label="Code"]')).toBeTruthy();
+    expect(fixture.nativeElement.querySelector('[aria-label="Link"]')).toBeTruthy();
+    expect(editor()).toBeTruthy();
   });
 });

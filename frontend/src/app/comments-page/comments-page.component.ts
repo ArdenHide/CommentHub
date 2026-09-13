@@ -122,6 +122,10 @@ export class CommentsPage implements OnInit {
   }
 
   prependComment(node: CommentItem): void {
+    if (this.comments().some((comment) => comment.id === node.id)) {
+      return;
+    }
+
     this.comments.update((current) => {
       const next = [node, ...current];
       return this.currentPage() === 1 ? next.slice(0, PAGE_SIZE) : next;
