@@ -2,6 +2,7 @@ using CommentHub.Database;
 using CommentHub.Database.DependencyInjection;
 using CommentHub.Database.Seeding;
 using CommentHub.GraphQL.DependencyInjection;
+using CommentHub.GraphQL.Realtime;
 using CommentHub.GraphQL.Services;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.EntityFrameworkCore;
@@ -88,5 +89,6 @@ attachments.MapGet("/{id:long}", async (long id, IDbContextFactory<CommentHubDbC
 });
 
 app.MapGraphQL();
+app.MapHub<CommentsHub>("/hubs/comments");
 
 app.Run();

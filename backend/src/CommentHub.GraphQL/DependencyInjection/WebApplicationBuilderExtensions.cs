@@ -1,5 +1,7 @@
+using System.Threading.Channels;
 using CommentHub.Database;
 using CommentHub.GraphQL.Configuration;
+using CommentHub.GraphQL.Realtime;
 using CommentHub.GraphQL.Services;
 using CommentHub.GraphQL.Types;
 using CommentHub.GraphQL.Validation;
@@ -26,9 +28,25 @@ public static class WebApplicationBuilderExtensions
         builder.Services.AddSingleton<IPendingAttachmentService, PendingAttachmentService>();
         builder.Services.AddSingleton<IAttachmentProcessingService, AttachmentProcessingService>();
 
+        builder.Services.AddCommentHubRealtime();
+
         return builder
             .AddGraphQL()
             .RegisterDbContextFactory<CommentHubDbContext>()
             .AddGraphQLTypes();
+    }
+
+    private static void AddCommentHubRealtime(this IServiceCollection services)
+    {
+        var channel = Channel.CreateBounded<CommentAddedEvent>(
+            new BoundedChannelOptions(1000) { FullMode = BoundedChannelFullMode.DropOldest, SingleReader = true }
+        );
+        services.AddSingleton(channel.Reader);
+        services.AddSingleton(channel.Writer);
+
+        services.AddSingleton<ICommentEventPublisher, CommentEventPublisher>();
+        services.AddSingleton<ICommentsCache, CommentsCache>();
+        services.AddHostedService<CommentEventWorker>();
+        services.AddSignalR();
     }
 }
