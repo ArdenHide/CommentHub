@@ -14,6 +14,7 @@ export const GET_COMMENT_REPLIES_QUERY = gql`
             userName
             homePage
             avatarSeed
+            maskedEmail
           }
           attachment {
             id
@@ -34,6 +35,7 @@ export const GET_COMMENT_REPLIES_QUERY = gql`
                 userName
                 homePage
                 avatarSeed
+                maskedEmail
               }
               attachment {
                 id

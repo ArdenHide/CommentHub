@@ -12,6 +12,7 @@ export const ADD_COMMENT_MUTATION = gql`
           userName
           homePage
           avatarSeed
+          maskedEmail
         }
         attachment {
           id

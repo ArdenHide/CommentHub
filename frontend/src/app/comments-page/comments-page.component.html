@@ -37,18 +37,26 @@
   @if (initialLoading()) {
     <p class="text-muted">Loading comments…</p>
   } @else {
-    <ul class="list-group list-group-flush">
-      @for (comment of comments(); track comment.id) {
-        <li class="list-group-item comment-card px-0 py-3">
-          <div class="d-flex">
-            <app-comment-avatar
-              class="flex-shrink-0 me-3"
-              [seed]="comment.avatarSeed"
-              [authorName]="comment.authorName"
-            />
-            <div class="flex-grow-1">
-              <div class="d-flex justify-content-between align-items-baseline">
-                <h6 class="mb-0">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle comments-table">
+        <thead>
+          <tr>
+            <th scope="col">User</th>
+            <th scope="col">Email</th>
+            <th scope="col">Date</th>
+            <th scope="col">Comment</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (comment of comments(); track comment.id) {
+            <tr class="comment-card">
+              <td>
+                <div class="d-flex align-items-center">
+                  <app-comment-avatar
+                    class="flex-shrink-0 me-2"
+                    [seed]="comment.avatarSeed"
+                    [authorName]="comment.authorName"
+                  />
                   @if (comment.authorHomePage; as homePage) {
                     <a
                       [href]="homePage"
@@ -63,38 +71,35 @@
                   } @else {
                     {{ comment.authorName }}
                   }
-                </h6>
-                <small class="text-muted">{{ comment.createdAt | date: 'medium' }}</small>
-              </div>
-              <p class="comment-text mb-2 mt-1" [innerHTML]="comment.textHtml"></p>
-              <app-comment-attachment [attachment]="comment.attachment" />
-              <button
-                type="button"
-                class="btn btn-link btn-sm p-0"
-                mdbRipple
-                (click)="onReply(comment, repliesRef)"
-              >
-                Reply
-              </button>
-              <app-comment-replies #repliesRef [node]="comment" />
-            </div>
-          </div>
-        </li>
-      }
-    </ul>
+                </div>
+              </td>
+              <td class="text-muted">{{ comment.authorMaskedEmail }}</td>
+              <td class="text-muted">{{ comment.createdAt | date: 'medium' }}</td>
+              <td>
+                <p class="comment-text mb-2 mt-1" [innerHTML]="comment.textHtml"></p>
+                <app-comment-attachment [attachment]="comment.attachment" />
+                <button
+                  type="button"
+                  class="btn btn-link btn-sm p-0"
+                  mdbRipple
+                  (click)="onReply(comment, repliesRef)"
+                >
+                  Reply
+                </button>
+                <app-comment-replies #repliesRef [node]="comment" />
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
 
-    @if (hasMore()) {
-      <div class="text-center mt-3">
-        <button
-          type="button"
-          class="btn btn-outline-primary"
-          mdbRipple
-          [disabled]="loading()"
-          (click)="loadMore()"
-        >
-          {{ loading() ? 'Loading…' : 'Load more' }}
-        </button>
-      </div>
+    @if (totalPages() > 1) {
+      <app-comment-pagination
+        [currentPage]="currentPage()"
+        [totalPages]="totalPages()"
+        (pageChange)="goToPage($event)"
+      />
     }
   }
 </div>

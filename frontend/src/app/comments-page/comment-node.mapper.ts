@@ -6,6 +6,7 @@ export interface CommentNode {
   id: number;
   authorName: string;
   authorHomePage: string | null;
+  authorMaskedEmail: string;
   avatarSeed: string;
   textHtml: string;
   createdAt: string;
@@ -26,6 +27,7 @@ export function mapCommentNode(dto: CommentNodeDto): CommentNode {
     id: dto.id,
     authorName: dto.user.userName,
     authorHomePage: dto.user.homePage,
+    authorMaskedEmail: dto.user.maskedEmail,
     avatarSeed: dto.user.avatarSeed,
     textHtml: dto.textHtml,
     createdAt: dto.createdAt,
@@ -41,6 +43,7 @@ export function mapNewComment(dto: AddedCommentDto): CommentNode {
     id: dto.id,
     authorName: dto.user.userName,
     authorHomePage: dto.user.homePage,
+    authorMaskedEmail: dto.user.maskedEmail,
     avatarSeed: dto.user.avatarSeed,
     textHtml: dto.textHtml,
     createdAt: dto.createdAt,
@@ -56,6 +59,7 @@ export function mapBroadcastToNode(dto: CommentBroadcastDto): CommentNode {
     id: dto.id,
     authorName: dto.user.userName,
     authorHomePage: dto.user.homePage,
+    authorMaskedEmail: dto.user.maskedEmail,
     avatarSeed: dto.user.avatarSeed,
     textHtml: dto.textHtml,
     createdAt: dto.createdAt,

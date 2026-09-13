@@ -18,6 +18,7 @@ export const GET_COMMENTS_QUERY = gql`
       userName
       homePage
       avatarSeed
+      maskedEmail
     }
     attachment {
       id
@@ -38,6 +39,7 @@ export const GET_COMMENTS_QUERY = gql`
           userName
           homePage
           avatarSeed
+          maskedEmail
         }
         attachment {
           id
@@ -58,6 +60,7 @@ export const GET_COMMENTS_QUERY = gql`
               userName
               homePage
               avatarSeed
+              maskedEmail
             }
             attachment {
               id
@@ -79,6 +82,7 @@ export interface UserDto {
   userName: string;
   homePage: string | null;
   avatarSeed: string;
+  maskedEmail: string;
 }
 
 export interface CommentAttachmentDto {

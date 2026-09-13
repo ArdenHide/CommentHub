@@ -1,12 +1,21 @@
 import { mapCommentNode, mapRepliesPage } from './comment-node.mapper';
 import { CommentNodeDto, RepliesPageDto } from './graphql/get-comments.query';
 
-function makeDto(id: number, replies: CommentNodeDto[] = [], repliesTotalCount = replies.length): CommentNodeDto {
+function makeDto(
+  id: number,
+  replies: CommentNodeDto[] = [],
+  repliesTotalCount = replies.length,
+): CommentNodeDto {
   return {
     id,
     textHtml: `<p>Comment ${id}</p>`,
     createdAt: '2026-09-08T10:15:00Z',
-    user: { userName: `User ${id}`, homePage: null, avatarSeed: `seed-${id}` },
+    user: {
+      userName: `User ${id}`,
+      homePage: null,
+      avatarSeed: `seed-${id}`,
+      maskedEmail: `u${id}***@example.com`,
+    },
     attachment: null,
     replies: { totalCount: repliesTotalCount, items: replies },
   };
@@ -40,7 +49,12 @@ describe('mapCommentNode', () => {
       id: 4,
       textHtml: '<p>Comment 4</p>',
       createdAt: '2026-09-08T10:15:00Z',
-      user: { userName: 'User 4', homePage: null, avatarSeed: 'seed-4' },
+      user: {
+        userName: 'User 4',
+        homePage: null,
+        avatarSeed: 'seed-4',
+        maskedEmail: 'u4***@example.com',
+      },
       attachment: null,
     };
     const dto = makeDto(1, [beyondQueriedDepth], 1);

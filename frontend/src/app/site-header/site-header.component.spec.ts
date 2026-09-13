@@ -10,6 +10,7 @@ function makeNode(id: number): CommentNode {
     id,
     authorName: 'alice',
     authorHomePage: null,
+    authorMaskedEmail: 'a***@example.com',
     avatarSeed: 'seed',
     textHtml: '<p>hi</p>',
     createdAt: '2026-09-11T10:00:00Z',

@@ -13,7 +13,12 @@ function successPayload(overrides?: Partial<AddCommentPayloadDto>): AddCommentPa
       id: 1,
       textHtml: '<strong>hi</strong>',
       createdAt: '2026-09-11T10:00:00Z',
-      user: { userName: 'alice', homePage: null, avatarSeed: 'seed' },
+      user: {
+        userName: 'alice',
+        homePage: null,
+        avatarSeed: 'seed',
+        maskedEmail: 'a***@example.com',
+      },
       attachment: null,
     },
     errors: [],
@@ -47,7 +52,10 @@ describe('CommentFormComponent', () => {
   let modalRef: { close: ReturnType<typeof vi.fn> };
   let commentsService: { addComment: ReturnType<typeof vi.fn> };
   let identityStore: { lookup: ReturnType<typeof vi.fn>; remember: ReturnType<typeof vi.fn> };
-  let attachmentUploadService: { upload: ReturnType<typeof vi.fn>; cancel: ReturnType<typeof vi.fn> };
+  let attachmentUploadService: {
+    upload: ReturnType<typeof vi.fn>;
+    cancel: ReturnType<typeof vi.fn>;
+  };
 
   async function createComponent(): Promise<void> {
     modalRef = { close: vi.fn() };
