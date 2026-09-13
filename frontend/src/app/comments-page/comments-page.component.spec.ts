@@ -1,5 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { of, throwError } from 'rxjs';
+import { of, Subject, throwError } from 'rxjs';
 import { MdbModalService } from 'mdb-angular-ui-kit/modal';
 import { CommentsPage } from './comments-page.component';
 import { CommentFormComponent } from './comment-form/comment-form.component';
@@ -60,7 +60,7 @@ describe('CommentsPage', () => {
 
     fixture.detectChanges();
 
-    expect(commentsService.getComments).toHaveBeenCalledWith(0, 25);
+    expect(commentsService.getComments).toHaveBeenCalledWith(0, 25, 'CREATED_AT', true);
     expect(component.comments()).toHaveLength(25);
     expect(component.totalCount()).toBe(60);
     expect(component.hasMore()).toBe(true);
@@ -82,7 +82,7 @@ describe('CommentsPage', () => {
     fixture.detectChanges();
     component.loadMore();
 
-    expect(commentsService.getComments).toHaveBeenCalledWith(25, 25);
+    expect(commentsService.getComments).toHaveBeenCalledWith(25, 25, 'CREATED_AT', true);
     expect(component.comments()).toHaveLength(50);
     expect(component.hasMore()).toBe(true);
   });
@@ -127,6 +127,7 @@ describe('CommentsPage', () => {
     const newNode: CommentNode = {
       id: 100,
       authorName: 'newbie',
+      authorHomePage: null,
       avatarSeed: 'seed-100',
       textHtml: '<p>hi</p>',
       createdAt: '2026-09-11T10:00:00Z',
@@ -146,6 +147,7 @@ describe('CommentsPage', () => {
     const newReply: CommentNode = {
       id: 200,
       authorName: 'replier',
+      authorHomePage: null,
       avatarSeed: 'seed-200',
       textHtml: '<p>reply text</p>',
       createdAt: '2026-09-11T10:00:00Z',
@@ -165,5 +167,64 @@ describe('CommentsPage', () => {
     fixture.detectChanges();
 
     expect(fixture.nativeElement.textContent).toContain('reply text');
+  });
+
+  it('changing the sort field resets the list and refetches from skip 0', () => {
+    commentsService.getComments
+      .mockReturnValueOnce(of(makePage(25, 60)))
+      .mockReturnValueOnce(of(makePage(10, 10)));
+
+    fixture.detectChanges();
+    component.onSortFieldChange('USER_NAME');
+
+    expect(commentsService.getComments).toHaveBeenCalledWith(0, 25, 'USER_NAME', true);
+    expect(component.comments()).toHaveLength(10);
+  });
+
+  it('changing the sort direction resets the list and refetches from skip 0', () => {
+    commentsService.getComments
+      .mockReturnValueOnce(of(makePage(25, 60)))
+      .mockReturnValueOnce(of(makePage(10, 10)));
+
+    fixture.detectChanges();
+    component.onSortDirectionChange(false);
+
+    expect(commentsService.getComments).toHaveBeenCalledWith(0, 25, 'CREATED_AT', false);
+    expect(component.comments()).toHaveLength(10);
+  });
+
+  it('re-selecting the same sort field or direction does not refetch', () => {
+    commentsService.getComments.mockReturnValue(of(makePage(25, 60)));
+
+    fixture.detectChanges();
+    const callsAfterInit = commentsService.getComments.mock.calls.length;
+
+    component.onSortFieldChange('CREATED_AT');
+    component.onSortDirectionChange(true);
+
+    expect(commentsService.getComments.mock.calls.length).toBe(callsAfterInit);
+  });
+
+  it('ignores a stale loadMore response that resolves after the sort changed', () => {
+    const initial$ = new Subject<ReturnType<typeof makePage>>();
+    const loadMore$ = new Subject<ReturnType<typeof makePage>>();
+    const sorted$ = new Subject<ReturnType<typeof makePage>>();
+
+    commentsService.getComments
+      .mockReturnValueOnce(initial$)
+      .mockReturnValueOnce(loadMore$)
+      .mockReturnValueOnce(sorted$);
+
+    fixture.detectChanges();
+    initial$.next(makePage(25, 60));
+
+    component.loadMore();
+    component.onSortFieldChange('USER_NAME');
+    sorted$.next(makePage(10, 10));
+
+    loadMore$.next(makePage(25, 60, 25));
+
+    expect(component.comments()).toHaveLength(10);
+    expect(component.totalCount()).toBe(10);
   });
 });

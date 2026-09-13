@@ -12,20 +12,46 @@ public static partial class CommentQueries
         CommentHubDbContext dbContext,
         CancellationToken cancellationToken,
         int skip = 0,
-        int take = 25
+        int take = 25,
+        CommentSortField sortBy = CommentSortField.CreatedAt,
+        bool descending = true
     )
     {
         var query = dbContext.Comments
             .Where(comment => comment.ParentId == null)
             .Include(comment => comment.User)
-            .Include(comment => comment.Attachments)
-            .OrderByDescending(comment => comment.CreatedAt)
-            .ThenByDescending(comment => comment.Id);
+            .Include(comment => comment.Attachments);
 
-        var totalCount = await query.CountAsync(cancellationToken);
-        var items = await query.Skip(skip).Take(take).ToListAsync(cancellationToken);
+        var ordered = ApplySort(query, sortBy, descending);
+
+        var totalCount = await ordered.CountAsync(cancellationToken);
+        var items = await ordered.Skip(skip).Take(take).ToListAsync(cancellationToken);
 
         return new CommentPage(items, totalCount);
+    }
+
+    private static IOrderedQueryable<Comment> ApplySort(
+        IQueryable<Comment> query,
+        CommentSortField sortBy,
+        bool descending
+    )
+    {
+        IOrderedQueryable<Comment> ordered = sortBy switch
+        {
+            CommentSortField.UserName => descending
+                ? query.OrderByDescending(comment => comment.User.UserName)
+                : query.OrderBy(comment => comment.User.UserName),
+            CommentSortField.Email => descending
+                ? query.OrderByDescending(comment => comment.User.Email)
+                : query.OrderBy(comment => comment.User.Email),
+            _ => descending
+                ? query.OrderByDescending(comment => comment.CreatedAt)
+                : query.OrderBy(comment => comment.CreatedAt),
+        };
+
+        return descending
+            ? ordered.ThenByDescending(comment => comment.Id)
+            : ordered.ThenBy(comment => comment.Id);
     }
 
     public static async Task<Comment?> GetCommentAsync(

@@ -11,6 +11,7 @@ function makeNode(id: number, overrides: Partial<CommentNode> = {}): CommentNode
   return {
     id,
     authorName: `User ${id}`,
+    authorHomePage: null,
     avatarSeed: `seed-${id}`,
     textHtml: `<p>Reply ${id}</p>`,
     createdAt: '2026-09-08T10:15:00Z',
