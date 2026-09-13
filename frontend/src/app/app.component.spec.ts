@@ -1,8 +1,9 @@
 import { TestBed } from '@angular/core/testing';
-import { of } from 'rxjs';
+import { of, Subject } from 'rxjs';
 import { MdbModalService } from 'mdb-angular-ui-kit/modal';
 import { App } from './app.component';
 import { CommentsService } from './comments-page/comments.service';
+import { CommentsRealtimeService } from './comments-page/comments-realtime.service';
 
 describe('App', () => {
   beforeEach(async () => {
@@ -14,6 +15,10 @@ describe('App', () => {
           useValue: { getComments: () => of({ totalCount: 0, items: [] }) },
         },
         { provide: MdbModalService, useValue: { open: vi.fn() } },
+        {
+          provide: CommentsRealtimeService,
+          useValue: { connect: vi.fn(), onCommentAdded: new Subject() },
+        },
       ],
     }).compileComponents();
   });

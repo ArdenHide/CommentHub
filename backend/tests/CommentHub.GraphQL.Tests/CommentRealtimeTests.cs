@@ -1,3 +1,4 @@
+using System.Net.Http.Json;
 using System.Text.Json;
 using CommentHub.GraphQL.Services;
 using Microsoft.AspNetCore.Http.Connections;
@@ -42,7 +43,12 @@ public sealed class CommentRealtimeTests(PostgresFixture postgres) : IAsyncLifet
         }
         """;
 
-    private object BuildInput(string userName = "alice", string email = "alice@example.com", string text = "hello")
+    private object BuildInput(
+        string userName = "alice",
+        string email = "alice@example.com",
+        string text = "hello",
+        string? attachmentToken = null
+    )
     {
         var captchaId = Guid.NewGuid().ToString();
         var challenge = _captcha.Generate(captchaId);
@@ -55,8 +61,19 @@ public sealed class CommentRealtimeTests(PostgresFixture postgres) : IAsyncLifet
             parentId = (long?)null,
             captchaId,
             captchaCode = challenge.Code,
-            attachmentToken = (string?)null,
+            attachmentToken,
         };
+    }
+
+    private async Task<string> UploadTextAttachmentAsync()
+    {
+        using var content = new MultipartFormDataContent();
+        content.Add(new ByteArrayContent("hello world"u8.ToArray()), "file", "notes.txt");
+
+        using var response = await _client.PostAsync("/attachments", content);
+        response.EnsureSuccessStatusCode();
+        var body = await response.Content.ReadFromJsonAsync<JsonDocument>();
+        return body!.RootElement.GetProperty("token").GetString()!;
     }
 
     // TestServer has no real socket to upgrade, so the WebSocket transport doesn't apply here;
@@ -95,6 +112,26 @@ public sealed class CommentRealtimeTests(PostgresFixture postgres) : IAsyncLifet
         Assert.Equal(JsonValueKind.Null, dto.GetProperty("parentId").ValueKind);
         Assert.Equal("<i>hi</i>", dto.GetProperty("textHtml").GetString());
         Assert.Equal("alice", dto.GetProperty("user").GetProperty("userName").GetString());
+    }
+
+    [Fact]
+    public async Task Broadcasts_the_attachment_kind_as_an_uppercase_string_not_a_raw_enum_number()
+    {
+        await using var connection = await ConnectAsync();
+        var received = new TaskCompletionSource<JsonElement>(TaskCreationOptions.RunContinuationsAsynchronously);
+        connection.On<JsonElement>("CommentAdded", dto => received.TrySetResult(dto));
+
+        var token = await UploadTextAttachmentAsync();
+        var input = BuildInput(attachmentToken: token);
+        using var result = await _client.PostGraphQLAsync(AddCommentMutation, new { input });
+        Assert.Empty(result.RootElement.GetProperty("data").GetProperty("addComment").GetProperty("errors").EnumerateArray());
+
+        var completed = await Task.WhenAny(received.Task, Task.Delay(TimeSpan.FromSeconds(10)));
+        Assert.True(completed == received.Task, "Timed out waiting for the CommentAdded broadcast.");
+
+        var attachment = (await received.Task).GetProperty("attachment");
+        Assert.Equal(JsonValueKind.String, attachment.GetProperty("kind").ValueKind);
+        Assert.Equal("TEXT", attachment.GetProperty("kind").GetString());
     }
 
     [Fact]

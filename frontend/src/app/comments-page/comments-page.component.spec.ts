@@ -4,8 +4,30 @@ import { MdbModalService } from 'mdb-angular-ui-kit/modal';
 import { CommentsPage } from './comments-page.component';
 import { CommentFormComponent } from './comment-form/comment-form.component';
 import { CommentsService } from './comments.service';
+import { CommentsRealtimeService, CommentBroadcastDto } from './comments-realtime.service';
 import { CommentsPageDto } from './graphql/get-comments.query';
 import { CommentNode } from './comment-node.mapper';
+
+function makeBroadcast(
+  id: number,
+  overrides: Partial<CommentBroadcastDto> = {},
+): CommentBroadcastDto {
+  return {
+    id,
+    parentId: null,
+    rootId: id,
+    textHtml: `<p>Broadcast ${id}</p>`,
+    createdAt: '2026-09-13T10:00:00Z',
+    user: {
+      userName: `User ${id}`,
+      homePage: null,
+      avatarSeed: `seed-${id}`,
+      maskedEmail: 'u***@example.com',
+    },
+    attachment: null,
+    ...overrides,
+  };
+}
 
 function makePage(count: number, totalCount: number, offset = 0): CommentsPageDto {
   return {
@@ -30,18 +52,24 @@ describe('CommentsPage', () => {
   let fixture: ComponentFixture<CommentsPage>;
   let commentsService: { getComments: ReturnType<typeof vi.fn> };
   let modalService: { open: ReturnType<typeof vi.fn> };
+  let realtimeService: {
+    connect: ReturnType<typeof vi.fn>;
+    onCommentAdded: Subject<CommentBroadcastDto>;
+  };
 
   beforeEach(async () => {
     commentsService = {
       getComments: vi.fn(),
     };
     modalService = { open: vi.fn() };
+    realtimeService = { connect: vi.fn(), onCommentAdded: new Subject<CommentBroadcastDto>() };
 
     await TestBed.configureTestingModule({
       imports: [CommentsPage],
       providers: [
         { provide: CommentsService, useValue: commentsService },
         { provide: MdbModalService, useValue: modalService },
+        { provide: CommentsRealtimeService, useValue: realtimeService },
       ],
     }).compileComponents();
 
@@ -203,6 +231,75 @@ describe('CommentsPage', () => {
     component.onSortDirectionChange(true);
 
     expect(commentsService.getComments.mock.calls.length).toBe(callsAfterInit);
+  });
+
+  it('connects to the realtime hub on init', () => {
+    commentsService.getComments.mockReturnValue(of(makePage(0, 0)));
+
+    fixture.detectChanges();
+
+    expect(realtimeService.connect).toHaveBeenCalled();
+  });
+
+  it('prepends a broadcast top-level comment while sorted by newest first', () => {
+    commentsService.getComments.mockReturnValue(of(makePage(1, 1)));
+    fixture.detectChanges();
+
+    realtimeService.onCommentAdded.next(makeBroadcast(500, { textHtml: '<p>live comment</p>' }));
+
+    expect(component.comments()[0].textHtml).toBe('<p>live comment</p>');
+    expect(component.totalCount()).toBe(2);
+  });
+
+  it('does not touch the list for a broadcast reply', () => {
+    commentsService.getComments.mockReturnValue(of(makePage(1, 1)));
+    fixture.detectChanges();
+
+    realtimeService.onCommentAdded.next(makeBroadcast(500, { parentId: 1 }));
+
+    expect(component.comments()).toHaveLength(1);
+    expect(component.totalCount()).toBe(1);
+    expect(component.newCommentsAvailable()).toBe(0);
+  });
+
+  it('ignores a broadcast for a comment already in the list (own just-added comment)', () => {
+    commentsService.getComments.mockReturnValue(of(makePage(1, 1)));
+    fixture.detectChanges();
+
+    realtimeService.onCommentAdded.next(makeBroadcast(1));
+
+    expect(component.comments()).toHaveLength(1);
+    expect(component.totalCount()).toBe(1);
+  });
+
+  it('counts new comments instead of reordering when not sorted by newest first', () => {
+    commentsService.getComments
+      .mockReturnValueOnce(of(makePage(1, 1)))
+      .mockReturnValueOnce(of(makePage(1, 1)));
+    fixture.detectChanges();
+    component.onSortFieldChange('USER_NAME');
+
+    realtimeService.onCommentAdded.next(makeBroadcast(500));
+
+    expect(component.newCommentsAvailable()).toBe(1);
+    expect(component.comments()).toHaveLength(1);
+  });
+
+  it('refreshForNewComments clears the counter and reloads from the top', () => {
+    commentsService.getComments
+      .mockReturnValueOnce(of(makePage(1, 1)))
+      .mockReturnValueOnce(of(makePage(1, 1)))
+      .mockReturnValueOnce(of(makePage(2, 2)));
+    fixture.detectChanges();
+    component.onSortDirectionChange(false);
+    realtimeService.onCommentAdded.next(makeBroadcast(500));
+    expect(component.newCommentsAvailable()).toBe(1);
+
+    component.refreshForNewComments();
+
+    expect(component.newCommentsAvailable()).toBe(0);
+    expect(commentsService.getComments).toHaveBeenLastCalledWith(0, 25, 'CREATED_AT', false);
+    expect(component.comments()).toHaveLength(2);
   });
 
   it('ignores a stale loadMore response that resolves after the sort changed', () => {

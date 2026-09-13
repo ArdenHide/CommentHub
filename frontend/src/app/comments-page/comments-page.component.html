@@ -8,6 +8,25 @@
     <div class="alert alert-danger" role="alert">{{ error() }}</div>
   }
 
+  @if (newCommentsAvailable() > 0) {
+    <div
+      class="alert alert-info d-flex justify-content-between align-items-center py-2"
+      role="status"
+    >
+      <span
+        >{{ newCommentsAvailable() }} new comment{{ newCommentsAvailable() > 1 ? 's' : '' }}</span
+      >
+      <button
+        type="button"
+        class="btn btn-sm btn-primary"
+        mdbRipple
+        (click)="refreshForNewComments()"
+      >
+        Refresh
+      </button>
+    </div>
+  }
+
   <app-comment-sort-bar
     [sortBy]="sortBy()"
     [descending]="sortDescending()"
