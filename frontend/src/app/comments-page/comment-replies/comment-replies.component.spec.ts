@@ -372,4 +372,28 @@ describe('CommentReplies', () => {
     expect(fixture.componentInstance.repliesTotalCount()).toBe(1);
     expect(fixture.nativeElement.textContent).not.toContain('duplicate');
   });
+
+  it('does not duplicate a reply when the modal close and the broadcast for it both arrive', () => {
+    setNode(makeNode(1, { repliesTotalCount: 1, replies: [makeNode(2)] }));
+    const component = fixture.componentInstance;
+
+    component.receiveNewReply(makeNode(99, { authorName: 'newbie' }));
+    commentAdded$.next(makeBroadcast(99, 1, { textHtml: '<p>live reply</p>' }));
+    fixture.detectChanges();
+
+    expect(component.repliesTotalCount()).toBe(2);
+    expect(fixture.nativeElement.querySelectorAll('.reply-card')).toHaveLength(2);
+  });
+
+  it('does not duplicate a reply when the broadcast arrives before the modal closes', () => {
+    setNode(makeNode(1, { repliesTotalCount: 1, replies: [makeNode(2)] }));
+    const component = fixture.componentInstance;
+
+    commentAdded$.next(makeBroadcast(99, 1, { textHtml: '<p>live reply</p>' }));
+    component.receiveNewReply(makeNode(99, { authorName: 'newbie' }));
+    fixture.detectChanges();
+
+    expect(component.repliesTotalCount()).toBe(2);
+    expect(fixture.nativeElement.querySelectorAll('.reply-card')).toHaveLength(2);
+  });
 });

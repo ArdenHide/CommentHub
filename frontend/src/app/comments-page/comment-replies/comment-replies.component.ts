@@ -101,13 +101,6 @@ export class CommentReplies {
         return;
       }
 
-      const visible =
-        this.fullReplies() ??
-        (this.node().repliesKnown ? this.node().replies : (this.discoveredPreview() ?? []));
-      if (visible.some((reply) => reply.id === dto.id)) {
-        return;
-      }
-
       this.receiveNewReply(mapBroadcastToNode(dto));
     });
   }
@@ -167,6 +160,10 @@ export class CommentReplies {
     const currentlyVisible =
       this.fullReplies() ??
       (this.node().repliesKnown ? this.node().replies : (this.discoveredPreview() ?? []));
+
+    if (currentlyVisible.some((reply) => reply.id === newReply.id)) {
+      return;
+    }
 
     this.fullReplies.set([newReply, ...currentlyVisible]);
     this.addedRepliesCount.update((count) => count + 1);
