@@ -1,33 +1,18 @@
-import {
-  Component,
-  ElementRef,
-  OnDestroy,
-  computed,
-  inject,
-  signal,
-  viewChild,
-} from '@angular/core';
+import { Component, OnDestroy, computed, inject, signal } from '@angular/core';
 import { FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { debounceTime, distinctUntilChanged, map } from 'rxjs';
 import { MdbModalRef } from 'mdb-angular-ui-kit/modal';
 import { MdbRippleModule } from 'mdb-angular-ui-kit/ripple';
+import { QuillEditorComponent, QuillModules } from 'ngx-quill';
+import type Quill from 'quill';
 import { environment } from '../../../environments/environment';
 import { CommentsService } from '../comments.service';
 import { CommentIdentity, CommentIdentityStore } from '../comment-identity.store';
 import { mapNewComment } from '../comment-node.mapper';
 import { AddCommentInput, UserErrorDto } from '../graphql/add-comment.mutation';
 import { AttachmentUploadResultDto, AttachmentUploadService } from '../attachment-upload.service';
-import {
-  EditorFormat,
-  buildFormattedNode,
-  formatsAtCaret,
-  formatsCoveringRange,
-  insertNodeAtCaret,
-  serializeEditorContent,
-  toggleFormatOnSelection,
-  wrapRangeInLink,
-} from './comment-editor.util';
+import { normalizeQuillHtml } from './comment-editor.util';
 
 type FieldName = 'email' | 'userName' | 'homePage' | 'text' | 'captchaCode';
 type AttachmentStatus = 'idle' | 'uploading' | 'uploaded' | 'error';
@@ -52,7 +37,7 @@ function generateUuid(): string {
 }
 
 @Component({
-  imports: [ReactiveFormsModule, MdbRippleModule],
+  imports: [ReactiveFormsModule, MdbRippleModule, QuillEditorComponent],
   selector: 'app-comment-form',
   styleUrl: './comment-form.component.scss',
   templateUrl: './comment-form.component.html',
@@ -66,14 +51,12 @@ export class CommentFormComponent implements OnDestroy {
   parentId: number | null = null;
   parentAuthorName: string | null = null;
 
-  readonly textArea = viewChild<ElementRef<HTMLDivElement>>('textArea');
-
   readonly submitting = signal(false);
   readonly formError = signal<string | null>(null);
   readonly matchedIdentity = signal<CommentIdentity | null>(null);
   readonly linkPromptOpen = signal(false);
   readonly linkHref = signal('');
-  readonly linkTitle = signal('');
+  readonly linkText = signal('');
   readonly captchaId = signal(generateUuid());
   readonly captchaImageUrl = computed(
     () => `${environment.apiBaseUrl}/captcha/${this.captchaId()}`,
@@ -85,14 +68,16 @@ export class CommentFormComponent implements OnDestroy {
   readonly attachmentPreview = signal<AttachmentUploadResultDto | null>(null);
   readonly attachmentLocalUrl = signal<string | null>(null);
 
-  readonly pendingFormats = signal<Set<EditorFormat>>(new Set());
-  readonly activeFormats = signal<Set<EditorFormat>>(new Set());
-  readonly codeActive = computed(() => this.activeFormats().has('code'));
-  readonly otherFormatActive = computed(
-    () => this.activeFormats().has('bold') || this.activeFormats().has('italic'),
-  );
+  readonly quillFormats = ['bold', 'italic', 'link', 'code'];
+  readonly quillModules: QuillModules = {
+    toolbar: {
+      container: [['bold', 'italic', 'code', 'link']],
+      handlers: { link: () => this.openLinkPrompt() },
+    },
+  };
 
-  private savedLinkRange: Range | null = null;
+  private quillEditor: Quill | null = null;
+  private savedLinkRange: { index: number; length: number } | null = null;
 
   readonly form = new FormGroup({
     email: new FormControl('', {
@@ -156,120 +141,51 @@ export class CommentFormComponent implements OnDestroy {
     return 'Invalid value.';
   }
 
-  toggleFormat(format: EditorFormat): void {
-    const root = this.editorRoot();
-    const range = this.getEditorRange();
-    if (!root || !range) {
-      return;
-    }
-
-    if (range.collapsed) {
-      this.pendingFormats.update((current) => {
-        const next = new Set(current);
-        if (next.has(format)) {
-          next.delete(format);
-        } else if (format === 'code') {
-          next.clear();
-          next.add('code');
-        } else {
-          next.delete('code');
-          next.add(format);
-        }
-        return next;
-      });
-      this.refreshActiveFormats();
-      return;
-    }
-
-    const newRange = toggleFormatOnSelection(range, format, root);
-    this.applyRange(newRange);
-    this.afterEditorMutation();
-  }
-
-  onEditorInput(): void {
-    this.afterEditorMutation();
+  onQuillEditorCreated(editor: Quill): void {
+    this.quillEditor = editor;
   }
 
   onEditorBlur(): void {
     this.form.controls.text.markAsTouched();
   }
 
-  onEditorKeyDown(event: KeyboardEvent): void {
-    if (event.key !== 'Enter') {
-      return;
-    }
-    event.preventDefault();
-    this.insertNode(document.createTextNode('\n'));
-    this.afterEditorMutation();
-  }
-
-  onEditorBeforeInput(event: InputEvent): void {
-    if (event.inputType !== 'insertText' && event.inputType !== 'insertReplacementText') {
-      return;
-    }
-    const data = event.data;
-    if (!data) {
-      return;
-    }
-    event.preventDefault();
-
-    const node =
-      this.pendingFormats().size > 0
-        ? buildFormattedNode(data, this.pendingFormats())
-        : document.createTextNode(data);
-    this.insertNode(node);
-    this.afterEditorMutation();
-  }
-
-  onEditorPaste(event: ClipboardEvent): void {
-    event.preventDefault();
-    const text = event.clipboardData?.getData('text/plain') ?? '';
-    if (!text) {
+  openLinkPrompt(): void {
+    const editor = this.quillEditor;
+    if (!editor) {
       return;
     }
 
-    const lines = text.split('\n');
-    lines.forEach((line, index) => {
-      if (index > 0) {
-        this.insertNode(document.createTextNode('\n'));
-      }
-      if (line) {
-        const node =
-          this.pendingFormats().size > 0
-            ? buildFormattedNode(line, this.pendingFormats())
-            : document.createTextNode(line);
-        this.insertNode(node);
-      }
-    });
-
-    this.afterEditorMutation();
-  }
-
-  toggleLinkPrompt(): void {
-    const range = this.getEditorRange();
-    if (range) {
-      this.savedLinkRange = range.cloneRange();
-    }
-    this.linkPromptOpen.update((open) => !open);
+    const range = editor.getSelection() ?? { index: editor.getLength(), length: 0 };
+    this.savedLinkRange = range;
+    this.linkText.set(range.length > 0 ? editor.getText(range.index, range.length) : '');
+    this.linkHref.set('');
+    this.linkPromptOpen.set(true);
   }
 
   insertLink(): void {
+    const editor = this.quillEditor;
+    const range = this.savedLinkRange;
     const href = this.linkHref().trim();
-    if (!href || !this.savedLinkRange) {
-      this.linkPromptOpen.set(false);
+    if (!editor || !range || !href) {
+      this.closeLinkPrompt();
       return;
     }
 
-    const title = this.linkTitle().trim();
-    const newRange = wrapRangeInLink(this.savedLinkRange, href, title, title || href);
-    this.applyRange(newRange);
-    this.afterEditorMutation();
+    const text = this.linkText().trim() || href;
+    editor.deleteText(range.index, range.length, 'user');
+    editor.insertText(range.index, text, { link: href }, 'user');
+    editor.setSelection(range.index + text.length, 0, 'user');
 
+    this.form.controls.text.markAsDirty();
+    this.closeLinkPrompt();
+    editor.focus();
+  }
+
+  private closeLinkPrompt(): void {
     this.savedLinkRange = null;
     this.linkPromptOpen.set(false);
     this.linkHref.set('');
-    this.linkTitle.set('');
-    this.editorRoot()?.focus();
+    this.linkText.set('');
   }
 
   cancel(): void {
@@ -344,7 +260,7 @@ export class CommentFormComponent implements OnDestroy {
       userName: raw.userName,
       email: raw.email,
       homePage: raw.homePage ? raw.homePage : null,
-      text: raw.text,
+      text: normalizeQuillHtml(raw.text),
       parentId: this.parentId,
       captchaId: this.captchaId(),
       captchaCode: raw.captchaCode,
@@ -378,76 +294,6 @@ export class CommentFormComponent implements OnDestroy {
         this.formError.set('Failed to submit your comment. Please try again.');
       },
     });
-  }
-
-  private afterEditorMutation(): void {
-    this.syncValueFromEditor();
-    this.form.controls.text.markAsDirty();
-    this.refreshActiveFormats();
-  }
-
-  private editorRoot(): HTMLDivElement | null {
-    return this.textArea()?.nativeElement ?? null;
-  }
-
-  private getEditorRange(): Range | null {
-    const root = this.editorRoot();
-    const selection = window.getSelection();
-    if (!root || !selection || selection.rangeCount === 0) {
-      return null;
-    }
-    const range = selection.getRangeAt(0);
-    if (!root.contains(range.commonAncestorContainer)) {
-      return null;
-    }
-    return range;
-  }
-
-  private applyRange(range: Range): void {
-    const selection = window.getSelection();
-    if (!selection) {
-      return;
-    }
-    selection.removeAllRanges();
-    selection.addRange(range);
-  }
-
-  private insertNode(node: Node): void {
-    const range = this.getEditorRange();
-    if (!range) {
-      return;
-    }
-    const newRange = insertNodeAtCaret(range, node);
-    this.applyRange(newRange);
-  }
-
-  private syncValueFromEditor(): void {
-    const root = this.editorRoot();
-    if (!root) {
-      return;
-    }
-    this.form.controls.text.setValue(serializeEditorContent(root), { emitEvent: false });
-  }
-
-  refreshActiveFormats(): void {
-    const root = this.editorRoot();
-    const range = this.getEditorRange();
-    if (!root || !range) {
-      this.activeFormats.set(new Set());
-      return;
-    }
-
-    if (!range.collapsed) {
-      this.activeFormats.set(formatsCoveringRange(range, root));
-      return;
-    }
-
-    if (this.pendingFormats().size > 0) {
-      this.activeFormats.set(new Set(this.pendingFormats()));
-      return;
-    }
-
-    this.activeFormats.set(formatsAtCaret(range.startContainer, root));
   }
 
   private clearAttachment(): void {

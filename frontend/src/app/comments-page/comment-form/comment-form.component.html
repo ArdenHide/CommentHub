@@ -57,76 +57,32 @@
     </div>
 
     <div class="mb-3">
-      <label class="form-label d-block" for="cf-text">Comment</label>
+      <label class="form-label d-block">Comment</label>
 
-      <div class="btn-toolbar mb-1" role="toolbar" aria-label="Formatting">
-        <button
-          type="button"
-          class="btn btn-outline-secondary btn-sm me-1"
-          [class.active]="activeFormats().has('bold')"
-          [disabled]="codeActive()"
-          mdbRipple
-          (mousedown)="$event.preventDefault()"
-          (click)="toggleFormat('bold')"
-          aria-label="Bold"
-          [attr.aria-pressed]="activeFormats().has('bold')"
-        >
-          <i class="fa fa-bold"></i>
-        </button>
-        <button
-          type="button"
-          class="btn btn-outline-secondary btn-sm me-1"
-          [class.active]="activeFormats().has('italic')"
-          [disabled]="codeActive()"
-          mdbRipple
-          (mousedown)="$event.preventDefault()"
-          (click)="toggleFormat('italic')"
-          aria-label="Italic"
-          [attr.aria-pressed]="activeFormats().has('italic')"
-        >
-          <i class="fa fa-italic"></i>
-        </button>
-        <button
-          type="button"
-          class="btn btn-outline-secondary btn-sm me-1"
-          [class.active]="activeFormats().has('code')"
-          [disabled]="otherFormatActive()"
-          mdbRipple
-          (mousedown)="$event.preventDefault()"
-          (click)="toggleFormat('code')"
-          aria-label="Code"
-          [attr.aria-pressed]="activeFormats().has('code')"
-        >
-          <i class="fa fa-code"></i>
-        </button>
-        <button
-          type="button"
-          class="btn btn-outline-secondary btn-sm"
-          [disabled]="codeActive()"
-          mdbRipple
-          (mousedown)="$event.preventDefault()"
-          (click)="toggleLinkPrompt()"
-          aria-label="Link"
-        >
-          <i class="fa fa-link"></i>
-        </button>
-      </div>
+      <quill-editor
+        formControlName="text"
+        [formats]="quillFormats"
+        [modules]="quillModules"
+        [class.is-invalid]="isInvalid('text')"
+        (onEditorCreated)="onQuillEditorCreated($event)"
+        (onBlur)="onEditorBlur()"
+      ></quill-editor>
 
       @if (linkPromptOpen()) {
-        <div class="d-flex gap-2 mb-2 link-prompt">
+        <div class="d-flex gap-2 mt-2 mb-2 link-prompt">
+          <input
+            type="text"
+            class="form-control form-control-sm"
+            placeholder="Link text"
+            [value]="linkText()"
+            (input)="linkText.set($any($event.target).value)"
+          />
           <input
             type="text"
             class="form-control form-control-sm"
             placeholder="https://example.com"
             [value]="linkHref()"
             (input)="linkHref.set($any($event.target).value)"
-          />
-          <input
-            type="text"
-            class="form-control form-control-sm"
-            placeholder="Title (optional)"
-            [value]="linkTitle()"
-            (input)="linkTitle.set($any($event.target).value)"
           />
           <button type="button" class="btn btn-primary btn-sm" mdbRipple (click)="insertLink()">
             Insert
@@ -142,22 +98,6 @@
         </div>
       }
 
-      <div
-        id="cf-text"
-        #textArea
-        class="form-control comment-text"
-        contenteditable="true"
-        role="textbox"
-        aria-multiline="true"
-        [class.is-invalid]="isInvalid('text')"
-        (beforeinput)="onEditorBeforeInput($event)"
-        (input)="onEditorInput()"
-        (keydown)="onEditorKeyDown($event)"
-        (paste)="onEditorPaste($event)"
-        (blur)="onEditorBlur()"
-        (mouseup)="refreshActiveFormats()"
-        (keyup)="refreshActiveFormats()"
-      ></div>
       <div class="form-text">
         Select text and use the toolbar to format it: bold, italic, code or a link.
       </div>
