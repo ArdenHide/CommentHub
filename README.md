@@ -123,3 +123,7 @@ docs/
 - A standalone SQL/DB-schema export file is intentionally not included — the schema is fully
   defined by the EF Core migrations under `backend/src/CommentHub.Database/Migrations`, which are
   the source of truth and are applied automatically by `docker compose up`.
+
+## Demo video
+
+[https://youtu.be/aHMP6C-4sec](https://youtu.be/aHMP6C-4sec)
