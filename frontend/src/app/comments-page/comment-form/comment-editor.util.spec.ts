@@ -112,6 +112,32 @@ describe('toggleFormatOnSelection', () => {
 
     expect(root.innerHTML).toBe('<code>snippet</code>');
   });
+
+  it('turning off italic on a bold+italic selection keeps bold and returns a non-collapsed range over the text', () => {
+    const root = makeRoot('hello');
+    let range = rangeOverAll(root);
+
+    range = toggleFormatOnSelection(range, 'bold', root);
+    range = toggleFormatOnSelection(range, 'italic', root);
+    range = toggleFormatOnSelection(range, 'italic', root);
+
+    expect(root.innerHTML).toBe('<strong>hello</strong>');
+    expect(range.collapsed).toBe(false);
+    expect(range.toString()).toBe('hello');
+  });
+
+  it('turning off bold on a bold+italic selection keeps italic and returns a non-collapsed range over the text', () => {
+    const root = makeRoot('hello');
+    let range = rangeOverAll(root);
+
+    range = toggleFormatOnSelection(range, 'italic', root);
+    range = toggleFormatOnSelection(range, 'bold', root);
+    range = toggleFormatOnSelection(range, 'bold', root);
+
+    expect(root.innerHTML).toBe('<i>hello</i>');
+    expect(range.collapsed).toBe(false);
+    expect(range.toString()).toBe('hello');
+  });
 });
 
 describe('wrapRangeInLink', () => {

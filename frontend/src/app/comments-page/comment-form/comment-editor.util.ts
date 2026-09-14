@@ -132,7 +132,35 @@ function unwrapElement(el: HTMLElement): void {
   parent.removeChild(el);
 }
 
+function getRangeTextOffset(root: Node, container: Node, offset: number): number {
+  const preRange = document.createRange();
+  preRange.selectNodeContents(root);
+  preRange.setEnd(container, offset);
+  return preRange.toString().length;
+}
+
+function findNodeAtTextOffset(root: Node, targetOffset: number): { node: Node; offset: number } {
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  let node = walker.nextNode();
+  let total = 0;
+  let last: Text | null = null;
+  while (node) {
+    const text = node as Text;
+    const length = text.textContent?.length ?? 0;
+    if (total + length >= targetOffset) {
+      return { node: text, offset: targetOffset - total };
+    }
+    total += length;
+    last = text;
+    node = walker.nextNode();
+  }
+  return last ? { node: last, offset: last.textContent?.length ?? 0 } : { node: root, offset: 0 };
+}
+
 function removeFormat(range: Range, tagName: FormatTag, root: Node): Range {
+  const startOffset = getRangeTextOffset(root, range.startContainer, range.startOffset);
+  const endOffset = getRangeTextOffset(root, range.endContainer, range.endOffset);
+
   const nodes = getIntersectingTextNodes(range, root);
   const elements = new Set<HTMLElement>();
   for (const node of nodes) {
@@ -140,7 +168,13 @@ function removeFormat(range: Range, tagName: FormatTag, root: Node): Range {
     if (el) elements.add(el);
   }
   elements.forEach(unwrapElement);
-  return range;
+
+  const start = findNodeAtTextOffset(root, startOffset);
+  const end = findNodeAtTextOffset(root, endOffset);
+  const newRange = document.createRange();
+  newRange.setStart(start.node, start.offset);
+  newRange.setEnd(end.node, end.offset);
+  return newRange;
 }
 
 function addFormat(range: Range, tagName: FormatTag): Range {

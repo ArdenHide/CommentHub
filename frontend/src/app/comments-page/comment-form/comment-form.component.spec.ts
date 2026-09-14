@@ -258,6 +258,24 @@ describe('CommentFormComponent', () => {
     expect(component.form.controls.text.value).toBe('hello world');
   });
 
+  it('turning off italic on a bold+italic selection keeps bold active and the selection intact', () => {
+    fixture.detectChanges();
+    editor().textContent = 'hello world';
+    const text = editor().firstChild!;
+    selectRange(text, 0, text, 5);
+
+    component.toggleFormat('bold');
+    fixture.detectChanges();
+    component.toggleFormat('italic');
+    fixture.detectChanges();
+    component.toggleFormat('italic');
+    fixture.detectChanges();
+
+    expect(editor().innerHTML).toBe('<strong>hello</strong> world');
+    expect(component.form.controls.text.value).toBe('<strong>hello</strong> world');
+    expect(component.activeFormats()).toEqual(new Set(['bold']));
+  });
+
   it('inserts a link tag from the link toolbar mini-form', () => {
     fixture.detectChanges();
     editor().textContent = 'click here';
